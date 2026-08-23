@@ -79,11 +79,24 @@ function drawFretboard(chord) {
     return el;
   };
 
+  const style = getComputedStyle(document.documentElement);
+  const inkColor = style.getPropertyValue("--ink").trim() || "#2b2118";
+  const inkSoft = style.getPropertyValue("--ink-soft").trim() || "#6f5f45";
+  const accentColor = style.getPropertyValue("--accent").trim() || "#14807f";
+  const accent2Color = style.getPropertyValue("--accent2").trim() || "#c98a12";
+  const muteColor = style.getPropertyValue("--mute").trim() || "#a83247";
+  const surfaceLine = style.getPropertyValue("--surface-line").trim() || "#e2d2a3";
+
+  // board fill (soundboard wood tone)
+  fretboardSvg.appendChild(
+    makeEl("rect", { x: boardLeft, y: boardTop, width: boardRight - boardLeft, height: boardBottom - boardTop, fill: surfaceLine, opacity: 0.35 })
+  );
+
   // strings (vertical lines)
   for (let s = 0; s < 4; s++) {
     const x = boardLeft + s * stringGap;
     fretboardSvg.appendChild(
-      makeEl("line", { x1: x, y1: boardTop, x2: x, y2: boardBottom, stroke: "#3a352f", "stroke-width": 2 })
+      makeEl("line", { x1: x, y1: boardTop, x2: x, y2: boardBottom, stroke: inkColor, "stroke-width": 2 })
     );
   }
 
@@ -92,13 +105,13 @@ function drawFretboard(chord) {
     const y = boardTop + f * fretGap;
     const isNut = f === 0 && startFret === 0;
     fretboardSvg.appendChild(
-      makeEl("line", { x1: boardLeft, y1: y, x2: boardRight, y2: y, stroke: "#3a352f", "stroke-width": isNut ? 5 : 1.5 })
+      makeEl("line", { x1: boardLeft, y1: y, x2: boardRight, y2: y, stroke: inkColor, "stroke-width": isNut ? 6 : 1.5 })
     );
   }
 
   // fret position label if not starting at nut
   if (startFret > 0) {
-    const label = makeEl("text", { x: boardLeft - 20, y: boardTop + fretGap * 0.7, "font-size": 12, fill: "#3a352f" });
+    const label = makeEl("text", { x: boardLeft - 22, y: boardTop + fretGap * 0.7, "font-size": 12, fill: inkColor, "font-weight": "bold" });
     label.textContent = (startFret + 1) + "fr";
     fretboardSvg.appendChild(label);
   }
@@ -108,34 +121,40 @@ function drawFretboard(chord) {
     const x = boardLeft + s * stringGap;
 
     // string name at bottom
-    const nameLabel = makeEl("text", { x: x - 4, y: boardBottom + 18, "font-size": 12, fill: "#7a6f5e" });
+    const nameLabel = makeEl("text", { x: x - 4, y: boardBottom + 20, "font-size": 13, fill: inkSoft, "font-weight": "bold" });
     nameLabel.textContent = stringLabels[s];
     fretboardSvg.appendChild(nameLabel);
 
     if (fret === -1) {
-      const x2 = makeEl("text", { x: x - 5, y: boardTop - 12, "font-size": 16, fill: "#c0392b", "font-weight": "bold" });
-      x2.textContent = "x";
+      const x2 = makeEl("text", { x: x - 6, y: boardTop - 10, "font-size": 18, fill: muteColor, "font-weight": "bold" });
+      x2.textContent = "×";
       fretboardSvg.appendChild(x2);
       return;
     }
     if (fret === 0) {
       fretboardSvg.appendChild(
-        makeEl("circle", { cx: x, cy: boardTop - 14, r: 6, fill: "none", stroke: "#4a7c59", "stroke-width": 2 })
+        makeEl("circle", { cx: x, cy: boardTop - 14, r: 7, fill: "none", stroke: accentColor, "stroke-width": 2.5 })
       );
       return;
     }
 
     const relFret = fret - startFret;
     const y = boardTop + (relFret - 0.5) * fretGap;
-    fretboardSvg.appendChild(makeEl("circle", { cx: x, cy: y, r: 11, fill: "#d97742" }));
+    fretboardSvg.appendChild(makeEl("circle", { cx: x, cy: y, r: 12, fill: accent2Color }));
     const finger = fingers[s];
     if (finger) {
       const t = makeEl("text", {
-        x: x, y: y + 4, "font-size": 12, fill: "white", "text-anchor": "middle", "font-weight": "bold"
+        x: x, y: y + 4.5, "font-size": 13, fill: "#2b2118", "text-anchor": "middle", "font-weight": "bold"
       });
       t.textContent = finger;
       fretboardSvg.appendChild(t);
     }
+  });
+}
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
   });
 }
 
