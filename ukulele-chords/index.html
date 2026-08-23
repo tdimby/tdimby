@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ukulele Chord Finder</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>🎶 Ukulele Chord Finder</h1>
+    <p class="subtitle">Standard GCEA tuning — find where to put your fingers</p>
+  </header>
+
+  <main>
+    <div class="search-row">
+      <input id="search" type="text" placeholder="Search a chord (e.g. C, Am, G7)" autocomplete="off">
+    </div>
+
+    <div class="categories" id="categories"></div>
+
+    <div class="grid" id="chordGrid"></div>
+  </main>
+
+  <div class="modal" id="modal">
+    <div class="modal-content">
+      <button class="close" id="closeModal">&times;</button>
+      <h2 id="modalTitle"></h2>
+      <svg id="fretboard" viewBox="0 0 220 300" xmlns="http://www.w3.org/2000/svg"></svg>
+      <p class="hint">Numbers show which finger to use. An open circle means play the string open (no finger). An "x" means don't play that string.</p>
+    </div>
+  </div>
+
+  <script src="chords.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
