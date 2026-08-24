@@ -429,13 +429,53 @@ svg#scaleNeck { display: block; margin: 0 auto; }
   margin: 0 auto;
 }
 
+/* tuner */
+.tuner-card { align-items: center; text-align: center; }
+.tuner-status {
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  margin: 0;
+  min-height: 1.2em;
+}
+.tuner-dial { display: none; flex-direction: column; align-items: center; gap: 0.2rem; width: 100%; }
+.tuner-dial.live { display: flex; }
+#tunerGauge { width: 100%; max-width: 320px; }
+.tuner-readout { margin-top: -1.1rem; text-align: center; }
+.tuner-note {
+  font-family: "Fraunces", Georgia, serif;
+  font-weight: 600;
+  font-size: 2.4rem;
+  line-height: 1;
+}
+.tuner-freq { color: var(--ink-soft); font-size: 0.8rem; margin-top: 0.2rem; }
+
+.string-targets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  justify-content: center;
+  width: 100%;
+}
+.string-target {
+  padding: 0.45rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--ink-soft);
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 700;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.string-target.nearest { border-color: var(--accent); color: var(--ink); }
+.string-target.in-tune { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
 @media (prefers-reduced-motion: reduce) {
   .chord-btn, .play-btn { transition: none; }
 }
 </style>
 </head>
 <body>
-
 
 <header>
   <p class="eyebrow mono">STRING · FRET · FINGER</p>
@@ -489,6 +529,24 @@ svg#scaleNeck { display: block; margin: 0 auto; }
         <button class="play-btn" id="playBuilder">▶ Play</button>
         <button class="play-btn" id="clearBuilder" style="background:var(--surface2); color:var(--ink);">Clear</button>
       </div>
+    </div>
+  </section>
+
+  <!-- TUNER -->
+  <section class="panel" id="panel-tuner">
+    <div class="field-card tuner-card">
+      <button class="play-btn" id="tunerToggle">🎙 Start tuner</button>
+      <p class="tuner-status mono" id="tunerStatus">Microphone is off</p>
+
+      <div class="tuner-dial" id="tunerDial" aria-hidden="true">
+        <svg viewBox="0 0 240 140" id="tunerGauge"></svg>
+        <div class="tuner-readout">
+          <div class="tuner-note" id="tunerNote">—</div>
+          <div class="tuner-freq mono" id="tunerFreq">0.0 Hz</div>
+        </div>
+      </div>
+
+      <div class="string-targets" id="stringTargets"></div>
     </div>
   </section>
 
@@ -774,11 +832,19 @@ const detectedNameEl = document.getElementById("detectedName");
 const detectedNotesEl = document.getElementById("detectedNotes");
 const playBuilderBtn = document.getElementById("playBuilder");
 const clearBuilderBtn = document.getElementById("clearBuilder");
+const tunerToggleBtn = document.getElementById("tunerToggle");
+const tunerStatusEl = document.getElementById("tunerStatus");
+const tunerDialEl = document.getElementById("tunerDial");
+const tunerGaugeSvg = document.getElementById("tunerGauge");
+const tunerNoteEl = document.getElementById("tunerNote");
+const tunerFreqEl = document.getElementById("tunerFreq");
+const stringTargetsEl = document.getElementById("stringTargets");
 
 const MODES = [
   { key: "chords", label: "Chords" },
   { key: "scales", label: "Scales" },
   { key: "builder", label: "Build" },
+  { key: "tuner", label: "Tuner" },
 ];
 let activeMode = "chords";
 
@@ -821,6 +887,7 @@ function renderModeTabs() {
       renderModeTabs();
       document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
       document.getElementById("panel-" + m.key).classList.add("active");
+      if (m.key !== "tuner") stopTuner();
     });
     modeTabs.appendChild(btn);
   });
@@ -1063,8 +1130,9 @@ function renderScaleNeck() {
 
   const scaleSet = new Set(SCALES[scaleName].map((iv) => (iv + scaleRoot) % 12));
 
-  for (let s = 0; s < n; s++) {
-    const y = top + s * stringGap;
+  for (let row = 0; row < n; row++) {
+    const s = n - 1 - row;
+    const y = top + row * stringGap;
     scaleNeckSvg.appendChild(svgEl("line", { x1: left, y1: y, x2: right, y2: y, stroke: inkColor, "stroke-width": 1.4, opacity: 0.8 }));
     const label = svgEl("text", { x: left - 38, y: y + 4, "font-size": 11, fill: inkSoft, "font-weight": "bold" });
     label.textContent = inst.strings[s];
@@ -1118,8 +1186,9 @@ function renderBuilderNeck() {
     builderNeckSvg.appendChild(svgEl("line", { x1: x, y1: top, x2: x, y2: bottom, stroke: inkColor, "stroke-width": f === 0 ? 5 : 1.2, opacity: f === 0 ? 1 : 0.6 }));
   }
 
-  for (let s = 0; s < n; s++) {
-    const y = top + s * stringGap;
+  for (let row = 0; row < n; row++) {
+    const s = n - 1 - row;
+    const y = top + row * stringGap;
     builderNeckSvg.appendChild(svgEl("line", { x1: left, y1: y, x2: right, y2: y, stroke: inkColor, "stroke-width": 1.4, opacity: 0.8 }));
     const label = svgEl("text", { x: left - 38, y: y + 4, "font-size": 11, fill: inkSoft, "font-weight": "bold" });
     label.textContent = inst.strings[s];
@@ -1188,6 +1257,163 @@ clearBuilderBtn.addEventListener("click", () => {
   updateDetection();
 });
 
+/* ============ TUNER ============ */
+let tunerCtx = null;
+let tunerStream = null;
+let tunerAnalyser = null;
+let tunerRAF = null;
+let tunerRunning = false;
+
+// Autocorrelation pitch detector (ACF2+), returns Hz or -1 if no clear pitch.
+function autoCorrelate(buf, sampleRate) {
+  const SIZE = buf.length;
+  let rms = 0;
+  for (let i = 0; i < SIZE; i++) rms += buf[i] * buf[i];
+  rms = Math.sqrt(rms / SIZE);
+  if (rms < 0.01) return -1;
+
+  let r1 = 0, r2 = SIZE - 1;
+  const thresh = 0.2;
+  for (let i = 0; i < SIZE / 2; i++) { if (Math.abs(buf[i]) < thresh) { r1 = i; break; } }
+  for (let i = 1; i < SIZE / 2; i++) { if (Math.abs(buf[SIZE - i]) < thresh) { r2 = SIZE - i; break; } }
+  const trimmed = buf.slice(r1, r2);
+  const n = trimmed.length;
+  const c = new Array(n).fill(0);
+  for (let lag = 0; lag < n; lag++) {
+    for (let i = 0; i < n - lag; i++) c[lag] += trimmed[i] * trimmed[i + lag];
+  }
+  let d = 0;
+  while (d < n - 1 && c[d] > c[d + 1]) d++;
+  let maxVal = -1, maxPos = -1;
+  for (let i = d; i < n; i++) {
+    if (c[i] > maxVal) { maxVal = c[i]; maxPos = i; }
+  }
+  let T0 = maxPos;
+  if (T0 <= 0) return -1;
+  const x1 = c[T0 - 1] || 0, x2 = c[T0], x3 = c[T0 + 1] || 0;
+  const a = (x1 + x3 - 2 * x2) / 2;
+  const b = (x3 - x1) / 2;
+  if (a) T0 = T0 - b / (2 * a);
+  return sampleRate / T0;
+}
+
+function freqToNote(freq) {
+  const midi = 69 + 12 * Math.log2(freq / 440);
+  const rounded = Math.round(midi);
+  const cents = Math.round((midi - rounded) * 100);
+  const pc = ((rounded % 12) + 12) % 12;
+  const octave = Math.floor(rounded / 12) - 1;
+  return { name: NOTE_NAMES[pc], octave, midi: rounded, cents, freq };
+}
+
+function renderStringTargets(nearestMidi) {
+  const inst = currentInstrument();
+  stringTargetsEl.innerHTML = "";
+  const n = inst.strings.length;
+  inst.openMidi.forEach((midi, i) => {
+    const btn = document.createElement("button");
+    btn.className = "string-target";
+    btn.textContent = `${inst.strings[i]}${n - i}`;
+    btn.title = "Play open " + inst.strings[i] + " string";
+    if (nearestMidi === midi) btn.classList.add("nearest");
+    btn.addEventListener("click", () => pluckNote(midiToFreq(midi + capoFret)));
+    stringTargetsEl.appendChild(btn);
+  });
+}
+
+function nearestStringMidi(midi) {
+  const inst = currentInstrument();
+  let best = inst.openMidi[0], bestDiff = Infinity;
+  inst.openMidi.forEach((m) => {
+    // compare using pitch-class + nearest octave distance in semitones, wrapped
+    let diff = Math.abs(m - midi);
+    diff = Math.min(diff, Math.abs((m + 12) - midi), Math.abs((m - 12) - midi));
+    if (diff < bestDiff) { bestDiff = diff; best = m; }
+  });
+  return best;
+}
+
+function drawTunerGauge(cents, inTune) {
+  tunerGaugeSvg.setAttribute("viewBox", "0 0 240 140");
+  tunerGaugeSvg.innerHTML = "";
+  const cx = 120, cy = 120, r = 95;
+  const inkSoft = cssVar("--ink-soft", "#8b96ac");
+  const accentColor = cssVar("--accent", "#2dd4bf");
+  const goldColor = cssVar("--gold", "#f0b93d");
+
+  // arc track
+  tunerGaugeSvg.appendChild(svgEl("path", {
+    d: `M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`,
+    fill: "none", stroke: inkSoft, "stroke-width": 6, opacity: 0.35,
+  }));
+  // tick marks every 10 cents from -50 to 50
+  for (let t = -50; t <= 50; t += 10) {
+    const angle = Math.PI + (t + 50) / 100 * Math.PI;
+    const x1 = cx + Math.cos(angle) * (r - 10), y1 = cy + Math.sin(angle) * (r - 10);
+    const x2 = cx + Math.cos(angle) * r, y2 = cy + Math.sin(angle) * r;
+    tunerGaugeSvg.appendChild(svgEl("line", { x1, y1, x2, y2, stroke: inkSoft, "stroke-width": t === 0 ? 3 : 1.5, opacity: t === 0 ? 0.9 : 0.5 }));
+  }
+  // needle
+  const clamped = Math.max(-50, Math.min(50, cents));
+  const angle = Math.PI + (clamped + 50) / 100 * Math.PI;
+  const nx = cx + Math.cos(angle) * (r - 16), ny = cy + Math.sin(angle) * (r - 16);
+  tunerGaugeSvg.appendChild(svgEl("line", { x1: cx, y1: cy, x2: nx, y2: ny, stroke: inTune ? accentColor : goldColor, "stroke-width": 4, "stroke-linecap": "round" }));
+  tunerGaugeSvg.appendChild(svgEl("circle", { cx, cy, r: 6, fill: inTune ? accentColor : goldColor }));
+}
+
+function tunerLoop() {
+  if (!tunerRunning) return;
+  const buf = new Float32Array(tunerAnalyser.fftSize);
+  tunerAnalyser.getFloatTimeDomainData(buf);
+  const freq = autoCorrelate(buf, tunerCtx.sampleRate);
+  if (freq > 0 && freq < 1200) {
+    const note = freqToNote(freq);
+    const nearest = nearestStringMidi(note.midi);
+    const inTune = Math.abs(note.cents) <= 4;
+    tunerNoteEl.textContent = note.name;
+    tunerNoteEl.style.color = inTune ? "var(--accent)" : "var(--ink)";
+    tunerFreqEl.textContent = `${freq.toFixed(1)} Hz · ${note.cents > 0 ? "+" : ""}${note.cents}¢`;
+    drawTunerGauge(note.cents, inTune);
+    renderStringTargets(nearest);
+    document.querySelectorAll(".string-target.nearest").forEach((el) => el.classList.toggle("in-tune", inTune));
+  }
+  tunerRAF = requestAnimationFrame(tunerLoop);
+}
+
+async function startTuner() {
+  try {
+    tunerStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+  } catch (err) {
+    tunerStatusEl.textContent = "Microphone blocked — allow mic access, or open this app directly in Safari (not inside a preview).";
+    return;
+  }
+  tunerCtx = getAudioCtx();
+  const source = tunerCtx.createMediaStreamSource(tunerStream);
+  tunerAnalyser = tunerCtx.createAnalyser();
+  tunerAnalyser.fftSize = 2048;
+  source.connect(tunerAnalyser);
+  tunerRunning = true;
+  tunerToggleBtn.textContent = "■ Stop tuner";
+  tunerStatusEl.textContent = "Listening… play one string at a time";
+  tunerDialEl.classList.add("live");
+  renderStringTargets(null);
+  tunerLoop();
+}
+
+function stopTuner() {
+  tunerRunning = false;
+  if (tunerRAF) cancelAnimationFrame(tunerRAF);
+  if (tunerStream) tunerStream.getTracks().forEach((t) => t.stop());
+  tunerStream = null;
+  tunerToggleBtn.textContent = "🎙 Start tuner";
+  tunerStatusEl.textContent = "Microphone is off";
+  tunerDialEl.classList.remove("live");
+}
+
+tunerToggleBtn.addEventListener("click", () => {
+  if (tunerRunning) stopTuner(); else startTuner();
+});
+
 /* ============ INIT ============ */
 function renderAll() {
   renderCategories();
@@ -1198,19 +1424,14 @@ function renderAll() {
   builderFrets = null;
   renderBuilderNeck();
   updateDetection();
+  renderStringTargets(null);
+  drawTunerGauge(0, false);
 }
 
 document.documentElement.setAttribute("data-inst", currentInstrumentKey);
 renderInstSwitch();
 renderModeTabs();
 renderAll();
-
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js").catch(() => {});
-  });
-}
 </script>
-
 </body>
 </html>
