@@ -207,6 +207,14 @@ main {
   gap: 0.65rem;
 }
 
+.empty-state {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+  padding: 2rem 1rem;
+}
+
 .chord-btn {
   position: relative;
   padding: 1rem 0.5rem;
@@ -431,6 +439,31 @@ svg#scaleNeck { display: block; margin: 0 auto; }
 
 /* tuner */
 .tuner-card { align-items: center; text-align: center; }
+.tuner-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+  width: 100%;
+}
+.ref-pitch {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+}
+.ref-step {
+  width: 26px; height: 26px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--ink);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
 .tuner-status {
   color: var(--ink-soft);
   font-size: 0.82rem;
@@ -441,13 +474,29 @@ svg#scaleNeck { display: block; margin: 0 auto; }
 .tuner-dial.live { display: flex; }
 #tunerGauge { width: 100%; max-width: 320px; }
 .tuner-readout { margin-top: -1.1rem; text-align: center; }
+.tuner-note-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+}
+.tuner-arrow {
+  font-size: 1.3rem;
+  color: var(--ink-faint);
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+.tuner-arrow.active { opacity: 1; color: var(--gold); }
 .tuner-note {
   font-family: "Fraunces", Georgia, serif;
   font-weight: 600;
   font-size: 2.4rem;
   line-height: 1;
+  transition: color 0.15s ease;
 }
+.tuner-note.locked { color: var(--accent); }
 .tuner-freq { color: var(--ink-soft); font-size: 0.8rem; margin-top: 0.2rem; }
+.tuner-hint { color: var(--ink-faint); font-size: 0.76rem; margin: 0; max-width: 380px; }
 
 .string-targets {
   display: flex;
@@ -457,6 +506,7 @@ svg#scaleNeck { display: block; margin: 0 auto; }
   width: 100%;
 }
 .string-target {
+  position: relative;
   padding: 0.45rem 0.8rem;
   border-radius: 999px;
   border: 1px solid var(--border);
@@ -468,10 +518,22 @@ svg#scaleNeck { display: block; margin: 0 auto; }
   cursor: pointer;
 }
 .string-target.nearest { border-color: var(--accent); color: var(--ink); }
-.string-target.in-tune { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.string-target.in-tune { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); animation: tuner-pulse 0.5s ease; }
+.string-target.tuned-done::after {
+  content: "✓";
+  margin-left: 0.35rem;
+  color: var(--accent);
+}
+.string-target.tuned-done { border-color: var(--accent); }
+
+@keyframes tuner-pulse {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
 
 @media (prefers-reduced-motion: reduce) {
-  .chord-btn, .play-btn { transition: none; }
+  .chord-btn, .play-btn, .string-target.in-tune { transition: none; animation: none; }
 }
 </style>
 </head>
@@ -535,17 +597,29 @@ svg#scaleNeck { display: block; margin: 0 auto; }
   <!-- TUNER -->
   <section class="panel" id="panel-tuner">
     <div class="field-card tuner-card">
-      <button class="play-btn" id="tunerToggle">🎙 Start tuner</button>
+      <div class="tuner-topbar">
+        <button class="play-btn" id="tunerToggle">🎙 Start tuner</button>
+        <div class="ref-pitch">
+          <button class="ref-step" id="refDown" aria-label="Lower reference pitch">–</button>
+          <span class="mono" id="refVal">A4 = 440Hz</span>
+          <button class="ref-step" id="refUp" aria-label="Raise reference pitch">+</button>
+        </div>
+      </div>
       <p class="tuner-status mono" id="tunerStatus">Microphone is off</p>
 
       <div class="tuner-dial" id="tunerDial" aria-hidden="true">
         <svg viewBox="0 0 240 140" id="tunerGauge"></svg>
         <div class="tuner-readout">
-          <div class="tuner-note" id="tunerNote">—</div>
+          <div class="tuner-note-row">
+            <span class="tuner-arrow" id="tunerFlat">◂</span>
+            <div class="tuner-note" id="tunerNote">—</div>
+            <span class="tuner-arrow" id="tunerSharp">▸</span>
+          </div>
           <div class="tuner-freq mono" id="tunerFreq">0.0 Hz</div>
         </div>
       </div>
 
+      <p class="tuner-hint">Tap a string below to hear its reference pitch, or just play it — we'll check off each one as it locks in tune.</p>
       <div class="string-targets" id="stringTargets"></div>
     </div>
   </section>
@@ -789,7 +863,18 @@ function playScaleNotes(rootIdx, scaleName, startOctaveMidi) {
 }
 
 /* ============ STATE ============ */
-let currentInstrumentKey = "ukulele";
+function loadPref(key, fallback) {
+  try {
+    const v = localStorage.getItem("fretboardlab_" + key);
+    return v || fallback;
+  } catch (e) { return fallback; }
+}
+function savePref(key, val) {
+  try { localStorage.setItem("fretboardlab_" + key, val); } catch (e) {}
+}
+
+let currentInstrumentKey = loadPref("instrument", "ukulele");
+if (!INSTRUMENTS[currentInstrumentKey]) currentInstrumentKey = "ukulele";
 let activeCategory = "All";
 let currentChord = null;
 let currentVoicingIndex = 0;
@@ -839,6 +924,11 @@ const tunerGaugeSvg = document.getElementById("tunerGauge");
 const tunerNoteEl = document.getElementById("tunerNote");
 const tunerFreqEl = document.getElementById("tunerFreq");
 const stringTargetsEl = document.getElementById("stringTargets");
+const tunerFlatEl = document.getElementById("tunerFlat");
+const tunerSharpEl = document.getElementById("tunerSharp");
+const refDownBtn = document.getElementById("refDown");
+const refUpBtn = document.getElementById("refUp");
+const refValEl = document.getElementById("refVal");
 
 const MODES = [
   { key: "chords", label: "Chords" },
@@ -846,7 +936,8 @@ const MODES = [
   { key: "builder", label: "Build" },
   { key: "tuner", label: "Tuner" },
 ];
-let activeMode = "chords";
+let activeMode = loadPref("mode", "chords");
+if (!MODES.some((m) => m.key === activeMode)) activeMode = "chords";
 
 function svgEl(tag, attrs) {
   const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
@@ -869,6 +960,9 @@ function renderInstSwitch() {
       document.documentElement.setAttribute("data-inst", key);
       instWord.textContent = key === "guitar" ? "Fretwork" : "Lab";
       builderFrets = null;
+      tunedStrings = new Set();
+      smoothedMidi = null;
+      savePref("instrument", key);
       renderInstSwitch();
       renderAll();
     });
@@ -884,6 +978,7 @@ function renderModeTabs() {
     btn.textContent = m.label;
     btn.addEventListener("click", () => {
       activeMode = m.key;
+      savePref("mode", m.key);
       renderModeTabs();
       document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
       document.getElementById("panel-" + m.key).classList.add("active");
@@ -911,12 +1006,22 @@ function renderGrid() {
   const inst = currentInstrument();
   const query = searchEl.value.trim().toLowerCase();
   grid.innerHTML = "";
-  inst.chords.filter((c) => {
+  const matches = inst.chords.filter((c) => {
     const matchesQuery = c.name.toLowerCase().includes(query);
     if (activeCategory === "All") return matchesQuery;
     if (activeCategory === "Favorites") return matchesQuery && isFav(currentInstrumentKey, c.name);
     return matchesQuery && c.category === activeCategory;
-  }).forEach((chord) => {
+  });
+  if (matches.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "empty-state";
+    empty.textContent = activeCategory === "Favorites" && !query
+      ? "No favorites yet — tap the star on any chord to save it here."
+      : `No chords match "${searchEl.value.trim()}".`;
+    grid.appendChild(empty);
+    return;
+  }
+  matches.forEach((chord) => {
     const btn = document.createElement("button");
     btn.className = "chord-btn";
     btn.textContent = chord.name;
@@ -986,6 +1091,17 @@ playChordBtn.addEventListener("click", () => {
 closeModalBtn.addEventListener("click", closeModal);
 modal.addEventListener("click", (e) => { if (e.target === modal) closeModal(); });
 searchEl.addEventListener("input", renderGrid);
+
+document.addEventListener("keydown", (e) => {
+  if (!modal.classList.contains("open")) return;
+  if (e.key === "Escape") { closeModal(); return; }
+  if (e.key === "ArrowLeft" && currentVoicingIndex > 0) { currentVoicingIndex--; renderVoicing(); }
+  if (e.key === "ArrowRight" && currentVoicingIndex < currentChord.voicings.length - 1) { currentVoicingIndex++; renderVoicing(); }
+  if (e.key === " " || e.key === "Enter") {
+    e.preventDefault();
+    playChordVoicing(currentInstrument(), currentChord.voicings[currentVoicingIndex], capoFret);
+  }
+});
 
 function drawChordDiagram(svg, inst, voicing) {
   const { frets, fingers } = voicing;
@@ -1263,24 +1379,44 @@ let tunerStream = null;
 let tunerAnalyser = null;
 let tunerRAF = null;
 let tunerRunning = false;
+let tunedStrings = new Set();
+let smoothedMidi = null;
 
-// Autocorrelation pitch detector (ACF2+), returns Hz or -1 if no clear pitch.
+let refA4 = 440;
+try {
+  const saved = Number(localStorage.getItem("fretboardlab_refA4"));
+  if (saved >= 430 && saved <= 450) refA4 = saved;
+} catch (e) {}
+
+function setRefA4(val) {
+  refA4 = Math.max(430, Math.min(450, val));
+  refValEl.textContent = `A4 = ${refA4}Hz`;
+  try { localStorage.setItem("fretboardlab_refA4", String(refA4)); } catch (e) {}
+}
+refDownBtn.addEventListener("click", () => setRefA4(refA4 - 1));
+refUpBtn.addEventListener("click", () => setRefA4(refA4 + 1));
+
+// Autocorrelation pitch detector (ACF2+). Returns { freq, clarity } or null if no signal.
+// clarity is the normalized autocorrelation peak (0-1) — how periodic/tonal the signal is,
+// used to reject noise and silence rather than reporting a jumpy false pitch.
 function autoCorrelate(buf, sampleRate) {
   const SIZE = buf.length;
   let rms = 0;
   for (let i = 0; i < SIZE; i++) rms += buf[i] * buf[i];
   rms = Math.sqrt(rms / SIZE);
-  if (rms < 0.01) return -1;
+  if (rms < 0.01) return null;
 
   let r1 = 0, r2 = SIZE - 1;
   const thresh = 0.2;
   for (let i = 0; i < SIZE / 2; i++) { if (Math.abs(buf[i]) < thresh) { r1 = i; break; } }
   for (let i = 1; i < SIZE / 2; i++) { if (Math.abs(buf[SIZE - i]) < thresh) { r2 = SIZE - i; break; } }
-  const trimmed = buf.slice(r1, r2);
-  const n = trimmed.length;
-  const c = new Array(n).fill(0);
+  const x = buf.slice(r1, r2);
+  const n = x.length;
+  const c = new Float64Array(n);
   for (let lag = 0; lag < n; lag++) {
-    for (let i = 0; i < n - lag; i++) c[lag] += trimmed[i] * trimmed[i + lag];
+    let sum = 0;
+    for (let i = 0; i < n - lag; i++) sum += x[i] * x[i + lag];
+    c[lag] = sum;
   }
   let d = 0;
   while (d < n - 1 && c[d] > c[d + 1]) d++;
@@ -1288,17 +1424,30 @@ function autoCorrelate(buf, sampleRate) {
   for (let i = d; i < n; i++) {
     if (c[i] > maxVal) { maxVal = c[i]; maxPos = i; }
   }
-  let T0 = maxPos;
-  if (T0 <= 0) return -1;
+  if (maxPos <= 0) return null;
+  const T0int = maxPos;
+
+  // clarity: normalized cross-correlation evaluated at the found lag only (stable —
+  // searching with the normalized score directly is unstable at large lags/low freqs).
+  let num = 0, energyA = 0, energyB = 0;
+  for (let i = 0; i < n - T0int; i++) {
+    num += x[i] * x[i + T0int];
+    energyA += x[i] * x[i];
+    energyB += x[i + T0int] * x[i + T0int];
+  }
+  const denom = Math.sqrt(energyA * energyB);
+  const clarity = denom > 0 ? num / denom : 0;
+
+  let T0 = T0int;
   const x1 = c[T0 - 1] || 0, x2 = c[T0], x3 = c[T0 + 1] || 0;
   const a = (x1 + x3 - 2 * x2) / 2;
   const b = (x3 - x1) / 2;
   if (a) T0 = T0 - b / (2 * a);
-  return sampleRate / T0;
+  return { freq: sampleRate / T0, clarity };
 }
 
 function freqToNote(freq) {
-  const midi = 69 + 12 * Math.log2(freq / 440);
+  const midi = 69 + 12 * Math.log2(freq / refA4);
   const rounded = Math.round(midi);
   const cents = Math.round((midi - rounded) * 100);
   const pc = ((rounded % 12) + 12) % 12;
@@ -1313,6 +1462,7 @@ function renderStringTargets(nearestMidi) {
   inst.openMidi.forEach((midi, i) => {
     const btn = document.createElement("button");
     btn.className = "string-target";
+    if (tunedStrings.has(midi)) btn.classList.add("tuned-done");
     btn.textContent = `${inst.strings[i]}${n - i}`;
     btn.title = "Play open " + inst.strings[i] + " string";
     if (nearestMidi === midi) btn.classList.add("nearest");
@@ -1361,21 +1511,52 @@ function drawTunerGauge(cents, inTune) {
   tunerGaugeSvg.appendChild(svgEl("circle", { cx, cy, r: 6, fill: inTune ? accentColor : goldColor }));
 }
 
+const TUNER_CLARITY_MIN = 0.9;
+const TUNER_SMOOTHING = 0.25;
+let tunerSilenceFrames = 0;
+
 function tunerLoop() {
   if (!tunerRunning) return;
   const buf = new Float32Array(tunerAnalyser.fftSize);
   tunerAnalyser.getFloatTimeDomainData(buf);
-  const freq = autoCorrelate(buf, tunerCtx.sampleRate);
-  if (freq > 0 && freq < 1200) {
-    const note = freqToNote(freq);
+  const result = autoCorrelate(buf, tunerCtx.sampleRate);
+
+  if (result && result.freq > 0 && result.freq < 1200 && result.clarity >= TUNER_CLARITY_MIN) {
+    tunerSilenceFrames = 0;
+    const rawMidi = 69 + 12 * Math.log2(result.freq / refA4);
+    if (smoothedMidi === null || Math.abs(rawMidi - smoothedMidi) > 1.5) {
+      smoothedMidi = rawMidi; // new note plucked — snap instead of sliding in from the old one
+    } else {
+      smoothedMidi += (rawMidi - smoothedMidi) * TUNER_SMOOTHING;
+    }
+    const note = freqToNote(refA4 * Math.pow(2, (smoothedMidi - 69) / 12));
     const nearest = nearestStringMidi(note.midi);
     const inTune = Math.abs(note.cents) <= 4;
+
     tunerNoteEl.textContent = note.name;
-    tunerNoteEl.style.color = inTune ? "var(--accent)" : "var(--ink)";
-    tunerFreqEl.textContent = `${freq.toFixed(1)} Hz · ${note.cents > 0 ? "+" : ""}${note.cents}¢`;
+    tunerNoteEl.classList.toggle("locked", inTune);
+    tunerFlatEl.classList.toggle("active", note.cents < -3);
+    tunerSharpEl.classList.toggle("active", note.cents > 3);
+    tunerFreqEl.textContent = `${result.freq.toFixed(1)} Hz · ${note.cents > 0 ? "+" : ""}${note.cents}¢`;
     drawTunerGauge(note.cents, inTune);
     renderStringTargets(nearest);
-    document.querySelectorAll(".string-target.nearest").forEach((el) => el.classList.toggle("in-tune", inTune));
+    if (inTune) {
+      const wasTuned = tunedStrings.has(nearest);
+      tunedStrings.add(nearest);
+      document.querySelectorAll(".string-target.nearest").forEach((el) => {
+        el.classList.add("tuned-done");
+        if (!wasTuned) el.classList.add("in-tune");
+      });
+    }
+  } else {
+    tunerSilenceFrames++;
+    if (tunerSilenceFrames > 20) {
+      smoothedMidi = null;
+      tunerFlatEl.classList.remove("active");
+      tunerSharpEl.classList.remove("active");
+      tunerNoteEl.classList.remove("locked");
+      if (tunerSilenceFrames === 21) tunerStatusEl.textContent = "Listening… play one string at a time";
+    }
   }
   tunerRAF = requestAnimationFrame(tunerLoop);
 }
@@ -1393,6 +1574,9 @@ async function startTuner() {
   tunerAnalyser.fftSize = 2048;
   source.connect(tunerAnalyser);
   tunerRunning = true;
+  smoothedMidi = null;
+  tunerSilenceFrames = 0;
+  tunedStrings = new Set();
   tunerToggleBtn.textContent = "■ Stop tuner";
   tunerStatusEl.textContent = "Listening… play one string at a time";
   tunerDialEl.classList.add("live");
@@ -1408,6 +1592,9 @@ function stopTuner() {
   tunerToggleBtn.textContent = "🎙 Start tuner";
   tunerStatusEl.textContent = "Microphone is off";
   tunerDialEl.classList.remove("live");
+  tunerFlatEl.classList.remove("active");
+  tunerSharpEl.classList.remove("active");
+  tunerNoteEl.classList.remove("locked");
 }
 
 tunerToggleBtn.addEventListener("click", () => {
@@ -1429,6 +1616,10 @@ function renderAll() {
 }
 
 document.documentElement.setAttribute("data-inst", currentInstrumentKey);
+instWord.textContent = currentInstrumentKey === "guitar" ? "Fretwork" : "Lab";
+document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
+document.getElementById("panel-" + activeMode).classList.add("active");
+refValEl.textContent = `A4 = ${refA4}Hz`;
 renderInstSwitch();
 renderModeTabs();
 renderAll();

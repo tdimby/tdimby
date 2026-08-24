@@ -1,4 +1,4 @@
-const CACHE_NAME = "fretboard-lab-v2";
+const CACHE_NAME = "fretboard-lab-v3";
 const ASSETS = [
   "./index.html",
   "./manifest.json",
