@@ -1623,6 +1623,12 @@ refValEl.textContent = `A4 = ${refA4}Hz`;
 renderInstSwitch();
 renderModeTabs();
 renderAll();
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  });
+}
 </script>
 </body>
 </html>
