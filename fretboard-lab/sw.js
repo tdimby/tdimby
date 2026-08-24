@@ -1,9 +1,6 @@
-const CACHE_NAME = "uke-chords-v1";
+const CACHE_NAME = "fretboard-lab-v1";
 const ASSETS = [
   "./index.html",
-  "./style.css",
-  "./chords.js",
-  "./script.js",
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png",
