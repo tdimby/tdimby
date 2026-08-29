@@ -1,0 +1,37 @@
+{
+  "expo": {
+    "name": "RunTogether",
+    "slug": "run-together",
+    "scheme": "runtogether",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.runtogether.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "RunTogether uses your location to track your runs and show your route.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "RunTogether tracks your location in the background so your run keeps recording and your friends can see your live progress.",
+        "UIBackgroundModes": ["location"]
+      }
+    },
+    "android": {
+      "package": "com.runtogether.app",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "RunTogether tracks your location during runs and while in the background so your route and pace keep recording."
+        }
+      ]
+    ]
+  }
+}
