@@ -9,4 +9,4 @@ jobs:
         working_directory: ./RunTogether
       - name: Publish update
         working_directory: ./RunTogether
-        run: npx eas update --branch preview --non-interactive --message "Preview update"
+        run: npx --package eas-cli eas update --branch preview --non-interactive --message "Preview update"
