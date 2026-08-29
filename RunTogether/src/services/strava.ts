@@ -132,12 +132,12 @@ export async function uploadRunToStrava(run: RunRecord): Promise<string | null> 
   if (!accessToken) throw new Error('Not connected to Strava');
 
   const gpx = buildGpx(run);
-  const fileUri = `${FileSystem.cacheDirectory}run-${run.id}.gpx`;
-  await FileSystem.writeAsStringAsync(fileUri, gpx, { encoding: FileSystem.EncodingType.UTF8 });
+  const file = new FileSystem.File(FileSystem.Paths.cache, `run-${run.id}.gpx`);
+  file.write(gpx);
 
   const form = new FormData();
   form.append('file', {
-    uri: fileUri,
+    uri: file.uri,
     name: `run-${run.id}.gpx`,
     type: 'application/gpx+xml',
   } as unknown as Blob);

@@ -8,11 +8,6 @@
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "icon": "./assets/icon.png",
-    "splash": {
-      "image": "./assets/splash.png",
-      "backgroundColor": "#111111",
-      "resizeMode": "contain"
-    },
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": false,
@@ -44,6 +39,14 @@
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "RunTogether tracks your location during runs and while in the background so your route and pace keep recording."
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "backgroundColor": "#111111",
+          "resizeMode": "contain"
         }
       ]
     ],

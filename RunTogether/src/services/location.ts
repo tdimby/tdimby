@@ -23,7 +23,7 @@ function toGeoPoint(loc: Location.LocationObject): GeoPoint {
   };
 }
 
-TaskManager.defineTask(LOCATION_TASK_NAME, ({ data, error }) => {
+TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
   if (error) {
     console.warn('Background location task error', error);
     return;
