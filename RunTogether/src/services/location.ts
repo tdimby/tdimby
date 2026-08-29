@@ -42,31 +42,66 @@ try {
   console.warn('Failed to register background location task', err);
 }
 
+let foregroundSubscription: Location.LocationSubscription | null = null;
+
+/**
+ * Requires foreground permission to track at all. Background permission is
+ * requested too, but its absence (or failure — e.g. running inside Expo Go,
+ * which can't provide a custom Info.plist for background-location entitlements)
+ * only disables background tracking, not the whole feature: the run still
+ * records while the Run screen is open in the foreground.
+ */
 export async function requestLocationPermissions(): Promise<boolean> {
   const fg = await Location.requestForegroundPermissionsAsync();
   if (fg.status !== 'granted') return false;
-  const bg = await Location.requestBackgroundPermissionsAsync();
-  return bg.status === 'granted';
+
+  try {
+    await Location.requestBackgroundPermissionsAsync();
+  } catch (err) {
+    console.warn('Background location permission unavailable; foreground-only tracking', err);
+  }
+  return true;
 }
 
 export async function startTracking(): Promise<void> {
-  const hasStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);
-  if (hasStarted) return;
+  try {
+    const hasStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);
+    if (hasStarted) return;
 
-  await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
-    accuracy: Location.Accuracy.BestForNavigation,
-    timeInterval: 2000,
-    distanceInterval: 5,
-    showsBackgroundLocationIndicator: true,
-    foregroundService: {
-      notificationTitle: 'RunTogether is tracking your run',
-      notificationBody: 'Recording your pace, route, and distance.',
-    },
-    pausesUpdatesAutomatically: false,
-  });
+    await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
+      accuracy: Location.Accuracy.BestForNavigation,
+      timeInterval: 2000,
+      distanceInterval: 5,
+      showsBackgroundLocationIndicator: true,
+      foregroundService: {
+        notificationTitle: 'RunTogether is tracking your run',
+        notificationBody: 'Recording your pace, route, and distance.',
+      },
+      pausesUpdatesAutomatically: false,
+    });
+  } catch (err) {
+    // No background-location entitlement available (e.g. Expo Go). Fall back to
+    // foreground-only tracking: it still records the run while this screen is open.
+    console.warn('Background tracking unavailable, using foreground-only tracking', err);
+    foregroundSubscription = await Location.watchPositionAsync(
+      {
+        accuracy: Location.Accuracy.BestForNavigation,
+        timeInterval: 2000,
+        distanceInterval: 5,
+      },
+      (loc) => {
+        const point = toGeoPoint(loc);
+        listeners.forEach((l) => l(point));
+      }
+    );
+  }
 }
 
 export async function stopTracking(): Promise<void> {
+  if (foregroundSubscription) {
+    foregroundSubscription.remove();
+    foregroundSubscription = null;
+  }
   const hasStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);
   if (hasStarted) {
     await Location.stopLocationUpdatesAsync(LOCATION_TASK_NAME);
