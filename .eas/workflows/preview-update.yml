@@ -1,5 +1,9 @@
 name: Publish preview update
 
+defaults:
+  tools:
+    node: 20.19.4
+
 jobs:
   publish_preview_update:
     name: Publish preview update
