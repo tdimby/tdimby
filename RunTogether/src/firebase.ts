@@ -1,5 +1,10 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, initializeAuth, getReactNativePersistence } from 'firebase/auth';
+import { getAuth, initializeAuth } from 'firebase/auth';
+// getReactNativePersistence is only exported from the RN build of @firebase/auth, resolved by
+// Metro's "react-native" package-export condition at bundle time — tsc doesn't apply that
+// condition, so it can't see the type here even though it's present at runtime.
+// @ts-expect-error - RN-only export, not visible to tsc's module resolution
+import { getReactNativePersistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 

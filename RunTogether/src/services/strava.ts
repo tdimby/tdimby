@@ -42,12 +42,16 @@ export async function disconnectStrava(): Promise<void> {
 export async function connectStrava(): Promise<boolean> {
   const redirectUri = AuthSession.makeRedirectUri({ scheme: 'runtogether', path: 'strava-auth' });
 
-  const authUrl =
-    `${AUTH_ENDPOINT}?client_id=${STRAVA_CLIENT_ID}` +
-    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-    `&response_type=code&approval_prompt=auto&scope=activity:write,activity:read_all`;
+  const request = new AuthSession.AuthRequest({
+    clientId: STRAVA_CLIENT_ID,
+    redirectUri,
+    responseType: AuthSession.ResponseType.Code,
+    usePKCE: false, // Strava's OAuth flow doesn't support PKCE; the confidential client_secret is used instead
+    scopes: ['activity:write', 'activity:read_all'],
+    extraParams: { approval_prompt: 'auto' },
+  });
 
-  const result = await AuthSession.startAsync({ authUrl });
+  const result = await request.promptAsync({ authorizationEndpoint: AUTH_ENDPOINT });
   if (result.type !== 'success' || !result.params?.code) {
     return false;
   }
