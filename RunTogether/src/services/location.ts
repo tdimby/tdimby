@@ -23,17 +23,24 @@ function toGeoPoint(loc: Location.LocationObject): GeoPoint {
   };
 }
 
-TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
-  if (error) {
-    console.warn('Background location task error', error);
-    return;
-  }
-  const { locations } = (data as { locations: Location.LocationObject[] }) ?? { locations: [] };
-  for (const loc of locations ?? []) {
-    const point = toGeoPoint(loc);
-    listeners.forEach((l) => l(point));
-  }
-});
+try {
+  TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
+    if (error) {
+      console.warn('Background location task error', error);
+      return;
+    }
+    const { locations } = (data as { locations: Location.LocationObject[] }) ?? { locations: [] };
+    for (const loc of locations ?? []) {
+      const point = toGeoPoint(loc);
+      listeners.forEach((l) => l(point));
+    }
+  });
+} catch (err) {
+  // Defining the background task can fail in some Expo Go / bare-client combinations;
+  // don't let it crash the whole app at bundle-evaluation time. Foreground tracking
+  // (used while the Run screen is open) doesn't depend on this task being registered.
+  console.warn('Failed to register background location task', err);
+}
 
 export async function requestLocationPermissions(): Promise<boolean> {
   const fg = await Location.requestForegroundPermissionsAsync();

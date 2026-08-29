@@ -10,7 +10,7 @@ import {
   serverTimestamp,
   Unsubscribe,
 } from 'firebase/firestore';
-import { db } from '@/firebase';
+import { getFirebaseDb } from '@/firebase';
 import { GroupRun, GroupRunParticipant, Gap } from '@/types';
 
 function randomCode(): string {
@@ -40,7 +40,7 @@ export async function createGroupRun(hostUid: string, hostName: string): Promise
       },
     },
   };
-  await setDoc(doc(db, 'groupRuns', id), groupRun);
+  await setDoc(doc(getFirebaseDb(), 'groupRuns', id), groupRun);
   return groupRun;
 }
 
@@ -53,20 +53,20 @@ export async function joinGroupRun(code: string, uid: string, displayName: strin
     paceSecPerKm: 0,
     finished: false,
   };
-  await updateDoc(doc(db, 'groupRuns', code), {
+  await updateDoc(doc(getFirebaseDb(), 'groupRuns', code), {
     [`participants.${uid}`]: participant,
   });
 }
 
 export async function startGroupRun(code: string): Promise<void> {
-  await updateDoc(doc(db, 'groupRuns', code), {
+  await updateDoc(doc(getFirebaseDb(), 'groupRuns', code), {
     status: 'active',
     startedAt: Date.now(),
   });
 }
 
 export async function finishParticipant(code: string, uid: string, finishTimeSeconds: number): Promise<void> {
-  await updateDoc(doc(db, 'groupRuns', code), {
+  await updateDoc(doc(getFirebaseDb(), 'groupRuns', code), {
     [`participants.${uid}.finished`]: true,
     [`participants.${uid}.finishTimeSeconds`]: finishTimeSeconds,
   });
@@ -79,7 +79,7 @@ export async function reportProgress(
   distanceMeters: number,
   paceSecPerKm: number
 ): Promise<void> {
-  await updateDoc(doc(db, 'groupRuns', code), {
+  await updateDoc(doc(getFirebaseDb(), 'groupRuns', code), {
     [`participants.${uid}.distanceMeters`]: distanceMeters,
     [`participants.${uid}.paceSecPerKm`]: paceSecPerKm,
     [`participants.${uid}.lastUpdated`]: Date.now(),
@@ -87,7 +87,7 @@ export async function reportProgress(
 }
 
 export function subscribeToGroupRun(code: string, cb: (run: GroupRun | null) => void): Unsubscribe {
-  return onSnapshot(doc(db, 'groupRuns', code), (snap) => {
+  return onSnapshot(doc(getFirebaseDb(), 'groupRuns', code), (snap) => {
     cb(snap.exists() ? (snap.data() as GroupRun) : null);
   });
 }

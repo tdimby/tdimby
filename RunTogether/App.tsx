@@ -1,16 +1,20 @@
+import 'react-native-gesture-handler';
 import React from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider } from '@/context/AuthContext';
 import RootNavigator from '@/navigation/RootNavigator';
+import ErrorBoundary from '@/ErrorBoundary';
 
 export default function App() {
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <AuthProvider>
-        <StatusBar style="auto" />
-        <RootNavigator />
-      </AuthProvider>
-    </GestureHandlerRootView>
+    <ErrorBoundary>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <AuthProvider>
+          <StatusBar style="auto" />
+          <RootNavigator />
+        </AuthProvider>
+      </GestureHandlerRootView>
+    </ErrorBoundary>
   );
 }

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, signInAnonymously, updateProfile, User } from 'firebase/auth';
-import { auth } from '@/firebase';
+import { getFirebaseAuth } from '@/firebase';
 
 interface AuthContextValue {
   user: User | null;
@@ -15,6 +15,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const auth = getFirebaseAuth();
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (u) {
         setUser(u);
@@ -28,6 +29,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   async function setDisplayName(name: string) {
+    const auth = getFirebaseAuth();
     if (!auth.currentUser) return;
     await updateProfile(auth.currentUser, { displayName: name });
     setUser({ ...auth.currentUser });
