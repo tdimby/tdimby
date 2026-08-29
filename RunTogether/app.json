@@ -1,7 +1,8 @@
 {
   "expo": {
     "name": "RunTogether",
-    "slug": "run-together",
+    "slug": "runtogether",
+    "owner": "tdimby",
     "scheme": "runtogether",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -45,6 +46,17 @@
           "locationAlwaysAndWhenInUsePermission": "RunTogether tracks your location during runs and while in the background so your route and pace keep recording."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "c64ce56e-8550-4b7a-8b86-2826a09518cb"
+      }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/c64ce56e-8550-4b7a-8b86-2826a09518cb"
+    },
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    }
   }
 }
