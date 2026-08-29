@@ -3,11 +3,10 @@ name: Publish preview update
 jobs:
   publish_preview_update:
     name: Publish preview update
-    defaults:
-      run:
-        working_directory: ./RunTogether
     steps:
       - uses: eas/checkout
       - uses: eas/install_node_modules
+        working_directory: ./RunTogether
       - name: Publish update
+        working_directory: ./RunTogether
         run: npx eas update --branch preview --non-interactive --message "Preview update"
