@@ -13,7 +13,7 @@ const AUTH_ENDPOINT = 'https://www.strava.com/oauth/mobile/authorize';
 const TOKEN_ENDPOINT = 'https://www.strava.com/oauth/token';
 const UPLOAD_ENDPOINT = 'https://www.strava.com/api/v3/uploads';
 
-const TOKEN_STORE_KEY = 'runtogether:strava_tokens';
+const TOKEN_STORE_KEY = 'runtogether_strava_tokens';
 
 interface StravaTokens {
   accessToken: string;

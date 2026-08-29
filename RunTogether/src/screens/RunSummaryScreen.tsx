@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, Alert } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@/navigation/RootNavigator';
-import { formatDuration, formatPace } from '@/services/pace';
+import { useSettings } from '@/context/SettingsContext';
+import { calcSplits, formatDistance, formatDuration, formatPace, paceForUnit, unitLabel } from '@/services/pace';
 import { uploadRunToStrava, getStoredTokens } from '@/services/strava';
 import { updateRun } from '@/services/storage';
 
@@ -10,8 +11,11 @@ type Props = NativeStackScreenProps<RootStackParamList, 'RunSummary'>;
 
 export default function RunSummaryScreen({ route, navigation }: Props) {
   const { run } = route.params;
+  const { unit } = useSettings();
   const [uploading, setUploading] = useState(false);
   const [uploaded, setUploaded] = useState(!!run.stravaActivityId);
+
+  const splits = useMemo(() => calcSplits(run.route, unit), [run.route, unit]);
 
   async function handleUploadToStrava() {
     setUploading(true);
@@ -38,20 +42,24 @@ export default function RunSummaryScreen({ route, navigation }: Props) {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.big}>{(run.distanceMeters / 1000).toFixed(2)} km</Text>
+      <Text style={styles.big}>{formatDistance(run.distanceMeters, unit)}</Text>
       <View style={styles.row}>
         <Stat label="Duration" value={formatDuration(run.durationSeconds)} />
-        <Stat label="Avg Pace" value={formatPace(run.avgPaceSecPerKm)} />
+        <Stat label="Avg Pace" value={formatPace(paceForUnit(run.avgPaceSecPerKm, unit), unit)} />
       </View>
 
       <Text style={styles.sectionTitle}>Splits</Text>
-      {run.splits.map((s) => (
-        <View key={s.km} style={styles.splitRow}>
-          <Text style={styles.splitLabel}>Km {s.km}</Text>
-          <Text style={styles.splitValue}>{formatPace(s.splitSeconds)}</Text>
+      {splits.map((s) => (
+        <View key={s.index} style={styles.splitRow}>
+          <Text style={styles.splitLabel}>
+            {unitLabel(unit) === 'mi' ? 'Mi' : 'Km'} {s.index}
+          </Text>
+          <Text style={styles.splitValue}>{formatPace(s.splitSeconds, unit)}</Text>
         </View>
       ))}
-      {run.splits.length === 0 && <Text style={styles.muted}>Run under 1km — no splits recorded.</Text>}
+      {splits.length === 0 && (
+        <Text style={styles.muted}>Run under 1 {unitLabel(unit)} — no splits recorded.</Text>
+      )}
 
       <Pressable
         style={[styles.stravaButton, uploaded && styles.stravaButtonDone]}

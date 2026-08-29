@@ -16,11 +16,12 @@ export interface RunRecord {
   durationSeconds: number;
   avgPaceSecPerKm: number; // seconds per km
   splits: Split[];
+  splitUnit: 'km' | 'mi';
   stravaActivityId?: string;
 }
 
 export interface Split {
-  km: number;
+  index: number;
   splitSeconds: number;
   cumulativeSeconds: number;
 }

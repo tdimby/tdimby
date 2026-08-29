@@ -3,11 +3,13 @@ import { View, Text, FlatList, StyleSheet, Pressable } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@/navigation/RootNavigator';
 import { leaderboard } from '@/services/groupRun';
-import { formatDuration } from '@/services/pace';
+import { useSettings } from '@/context/SettingsContext';
+import { formatDistance, formatDuration } from '@/services/pace';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GroupRunResults'>;
 
 export default function GroupRunResultsScreen({ route, navigation }: Props) {
+  const { unit } = useSettings();
   const board = leaderboard(route.params.run);
   const leaderDistance = board[0]?.distanceMeters ?? 0;
   const leaderTime = board[0]?.finishTimeSeconds;
@@ -29,7 +31,7 @@ export default function GroupRunResultsScreen({ route, navigation }: Props) {
               <View style={{ flex: 1 }}>
                 <Text style={styles.name}>{item.displayName}</Text>
                 <Text style={styles.detail}>
-                  {(item.distanceMeters / 1000).toFixed(2)} km
+                  {formatDistance(item.distanceMeters, unit)}
                   {item.finished && item.finishTimeSeconds != null
                     ? ` · ${formatDuration(item.finishTimeSeconds)}`
                     : ' · did not finish'}

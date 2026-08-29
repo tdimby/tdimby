@@ -3,9 +3,10 @@ import { View, Text, FlatList, StyleSheet } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@/navigation/RootNavigator';
 import { useAuth } from '@/context/AuthContext';
+import { useSettings } from '@/context/SettingsContext';
 import { GroupRun } from '@/types';
 import { subscribeToGroupRun, computeGaps } from '@/services/groupRun';
-import { formatDuration, formatPace } from '@/services/pace';
+import { formatDistance, formatDuration, formatPace, paceForUnit } from '@/services/pace';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GroupRunLive'>;
 
@@ -16,6 +17,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'GroupRunLive'>;
  */
 export default function GroupRunLiveScreen({ route, navigation }: Props) {
   const { user } = useAuth();
+  const { unit } = useSettings();
   const [run, setRun] = useState<GroupRun | null>(null);
 
   useEffect(() => {
@@ -36,8 +38,8 @@ export default function GroupRunLiveScreen({ route, navigation }: Props) {
   return (
     <View style={styles.container}>
       <View style={styles.meCard}>
-        <Text style={styles.meDistance}>{((me?.distanceMeters ?? 0) / 1000).toFixed(2)} km</Text>
-        <Text style={styles.mePace}>{formatPace(me?.paceSecPerKm ?? 0)}</Text>
+        <Text style={styles.meDistance}>{formatDistance(me?.distanceMeters ?? 0, unit)}</Text>
+        <Text style={styles.mePace}>{formatPace(paceForUnit(me?.paceSecPerKm ?? 0, unit), unit)}</Text>
       </View>
 
       <FlatList

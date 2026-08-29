@@ -5,11 +5,13 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@/navigation/RootNavigator';
 import { RunRecord } from '@/types';
 import { getRuns } from '@/services/storage';
-import { formatDuration, formatPace } from '@/services/pace';
+import { useSettings } from '@/context/SettingsContext';
+import { formatDistance, formatDuration, formatPace, paceForUnit } from '@/services/pace';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'History'>;
 
 export default function HistoryScreen({ navigation }: Props) {
+  const { unit } = useSettings();
   const [runs, setRuns] = useState<RunRecord[]>([]);
 
   useFocusEffect(
@@ -28,9 +30,9 @@ export default function HistoryScreen({ navigation }: Props) {
         <Pressable style={styles.card} onPress={() => navigation.navigate('RunSummary', { run: item })}>
           <Text style={styles.date}>{new Date(item.startedAt).toLocaleString()}</Text>
           <View style={styles.row}>
-            <Text style={styles.distance}>{(item.distanceMeters / 1000).toFixed(2)} km</Text>
+            <Text style={styles.distance}>{formatDistance(item.distanceMeters, unit)}</Text>
             <Text style={styles.meta}>{formatDuration(item.durationSeconds)}</Text>
-            <Text style={styles.meta}>{formatPace(item.avgPaceSecPerKm)}</Text>
+            <Text style={styles.meta}>{formatPace(paceForUnit(item.avgPaceSecPerKm, unit), unit)}</Text>
           </View>
           {item.stravaActivityId && <Text style={styles.stravaBadge}>Synced to Strava</Text>}
         </Pressable>
