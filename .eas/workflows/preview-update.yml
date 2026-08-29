@@ -1,5 +1,9 @@
 name: Publish preview update
 
+defaults:
+  run:
+    working_directory: ./RunTogether
+
 jobs:
   publish_preview_update:
     name: Publish preview update
