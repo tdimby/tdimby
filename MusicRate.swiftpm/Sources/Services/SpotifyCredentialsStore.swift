@@ -18,7 +18,7 @@ final class SpotifyCredentialsStore: ObservableObject {
 
     init() {
         clientID = UserDefaults.standard.string(forKey: Self.clientIDKey) ?? "50d4476c330d49b79d950dea008d27cc"
-        clientSecret = UserDefaults.standard.string(forKey: Self.clientSecretKey) ?? ""
+        clientSecret = UserDefaults.standard.string(forKey: Self.clientSecretKey) ?? "219d7f5afcc54d9eac25f26cfc9bc025"
     }
 
     var hasCredentials: Bool {
