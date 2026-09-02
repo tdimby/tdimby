@@ -1,10 +1,80 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Stage 1: any signed-in account can read/write. This gets tightened
-    // to real per-group/private rules in stage 2 (privacy model).
-    match /{document=**} {
-      allow read, write: if request.auth != null;
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Membership doc IDs are always "{groupID}_{userID}" (see MusicStore.join),
+    // so this is a direct lookup, not a query.
+    function isGroupMember(groupID) {
+      return exists(/databases/$(database)/documents/memberships/$(groupID + '_' + request.auth.uid));
+    }
+
+    match /users/{userID} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && request.auth.uid == userID;
+    }
+
+    // Shared reference data (song title/artwork/etc) - not sensitive.
+    match /songs/{songID} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /groups/{groupID} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.ownerUserID == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.ownerUserID == request.auth.uid;
+      allow delete: if false;
+    }
+
+    match /memberships/{membershipID} {
+      allow read: if isSignedIn() && resource.data.userID == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userID == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // A rating is visible to its own author always, to everyone if posted
+    // Worldwide, or to members of the group it was posted to. Private
+    // ratings (groupID == "private") are visible only via the first clause.
+    match /ratings/{ratingID} {
+      allow read: if isSignedIn() && (
+        resource.data.userID == request.auth.uid ||
+        resource.data.groupID == 'worldwide' ||
+        (resource.data.groupID != 'private' && isGroupMember(resource.data.groupID))
+      );
+      allow write: if isSignedIn() &&
+        request.resource.data.userID == request.auth.uid &&
+        (
+          request.resource.data.groupID == 'private' ||
+          request.resource.data.groupID == 'worldwide' ||
+          isGroupMember(request.resource.data.groupID)
+        );
+    }
+
+    match /weeklyRounds/{roundID} {
+      allow read: if isSignedIn() && isGroupMember(resource.data.groupID);
+      allow create: if isSignedIn() && isGroupMember(request.resource.data.groupID);
+      // Resolving a round (isResolved/winningSubmissionID) is done by any
+      // member, client-side - see WeeklyPickStore.resolve().
+      allow update: if isSignedIn() && isGroupMember(resource.data.groupID);
+    }
+
+    match /submissions/{submissionID} {
+      allow read: if isSignedIn() && isGroupMember(resource.data.groupID);
+      allow create: if isSignedIn() &&
+        request.resource.data.submittedByUserID == request.auth.uid &&
+        isGroupMember(request.resource.data.groupID);
+      allow update, delete: if false;
+    }
+
+    // Enforced here too, not just client-side (WeeklyPickStore.rateSubmission):
+    // you can't rate your own submission.
+    match /submissionRatings/{ratingID} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() &&
+        request.resource.data.raterUserID == request.auth.uid &&
+        get(/databases/$(database)/documents/submissions/$(request.resource.data.submissionID)).data.submittedByUserID != request.auth.uid;
     }
   }
 }

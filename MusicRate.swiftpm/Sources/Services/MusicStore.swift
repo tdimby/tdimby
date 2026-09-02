@@ -70,12 +70,12 @@ final class MusicStore: ObservableObject {
     // MARK: - Ratings
 
     @discardableResult
-    func submitRating(for item: SpotifyItem, stars: Int, note: String?, group: RatingGroup?, displayName: String) async throws -> Rating {
+    func submitRating(for item: SpotifyItem, stars: Int, note: String?, audience: RatingAudience, displayName: String) async throws -> Rating {
         guard let userID = currentUserID else { throw MusicStoreError.notSignedIn }
         try await upsertSong(item)
         let token = try await account.validIDToken()
 
-        let groupID = group?.id ?? worldwideGroupID
+        let groupID = audience.groupIDValue
         let ratingID = "\(userID)_\(item.spotifyID)_\(groupID)"
         let trimmedNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
         let existing = try? await FirestoreService.getDocument(path: "ratings/\(ratingID)", idToken: token)

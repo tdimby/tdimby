@@ -2,6 +2,11 @@ import SwiftUI
 
 struct SongDetailView: View {
     let item: SpotifyItem
+    /// If set, this view was reached from inside that group's feed - the
+    /// "Average Rating"/"Ratings" sections show that group's numbers, and
+    /// the rating picker below defaults to posting back to that same
+    /// group. If nil, those sections show Worldwide, and the picker
+    /// defaults to Private (see `RatingAudience`).
     let group: RatingGroup?
 
     @EnvironmentObject var store: MusicStore
@@ -11,6 +16,7 @@ struct SongDetailView: View {
     @State private var summary = RatingSummary.empty
     @State private var myStars = 0
     @State private var myNote = ""
+    @State private var audience: RatingAudience = .privateOnly
     @State private var isSubmitting = false
     @State private var errorText: String?
 
@@ -28,7 +34,7 @@ struct SongDetailView: View {
                 }
             }
 
-            Section("Average Rating") {
+            Section(group.map { "\($0.name) Average" } ?? "Worldwide Average") {
                 HStack {
                     StaticStarsView(rating: summary.average, size: 18)
                     Text(summaryText)
@@ -36,7 +42,14 @@ struct SongDetailView: View {
                 }
             }
 
-            Section(group.map { "Rate for \($0.name)" } ?? "Rate for Everyone") {
+            Section("Rate For") {
+                Picker("Audience", selection: $audience) {
+                    Text("Private (Just Me)").tag(RatingAudience.privateOnly)
+                    Text("Worldwide").tag(RatingAudience.worldwide)
+                    ForEach(store.myGroups) { group in
+                        Text(group.name).tag(RatingAudience.group(group))
+                    }
+                }
                 StarRatingView(rating: $myStars)
                 TextField("Add a note (optional)", text: $myNote, axis: .vertical)
                 Button {
@@ -49,10 +62,12 @@ struct SongDetailView: View {
                     }
                 }
                 .disabled(myStars == 0 || isSubmitting)
+            } footer: {
+                Text("Private ratings are only visible to you.")
             }
 
             if !ratings.isEmpty {
-                Section("Ratings") {
+                Section(group.map { "\($0.name)'s Ratings" } ?? "Worldwide Ratings") {
                     ForEach(ratings) { rating in
                         RatingRow(rating: rating)
                     }
@@ -61,7 +76,10 @@ struct SongDetailView: View {
         }
         .navigationTitle(item.title)
         .navigationBarTitleDisplayMode(.inline)
-        .task { await load() }
+        .task {
+            audience = group.map(RatingAudience.group) ?? .privateOnly
+            await load()
+        }
         .alert(
             "MusicRate",
             isPresented: Binding(get: { errorText != nil }, set: { if !$0 { errorText = nil } })
@@ -83,10 +101,6 @@ struct SongDetailView: View {
             let groupID = group?.id ?? worldwideGroupID
             ratings = try await store.ratings(forSongID: item.spotifyID, groupID: groupID)
             summary = RatingSummary(ratings: ratings)
-            if let mine = ratings.first(where: { $0.userID == account.userID }) {
-                myStars = mine.stars
-                myNote = mine.note ?? ""
-            }
         } catch {
             errorText = error.localizedDescription
         }
@@ -100,9 +114,11 @@ struct SongDetailView: View {
                 for: item,
                 stars: myStars,
                 note: myNote,
-                group: group,
+                audience: audience,
                 displayName: account.displayName
             )
+            myStars = 0
+            myNote = ""
             await load()
         } catch {
             errorText = error.localizedDescription

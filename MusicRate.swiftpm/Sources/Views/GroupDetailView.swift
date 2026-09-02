@@ -23,6 +23,8 @@ struct GroupDetailView: View {
                 }
             }
 
+            WeeklyPickSection(group: group)
+
             if isLoading {
                 ProgressView()
             } else if feedItems.isEmpty {

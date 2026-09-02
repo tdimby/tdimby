@@ -15,7 +15,7 @@ struct AddLinkView: View {
 
     @State private var stars = 0
     @State private var note = ""
-    @State private var selectedGroupID: String?
+    @State private var audience: RatingAudience = .privateOnly
     @State private var isSubmitting = false
     @State private var submitError: String?
     @State private var didSubmit = false
@@ -66,12 +66,15 @@ struct AddLinkView: View {
                     }
 
                     Section("Rate For") {
-                        Picker("Audience", selection: $selectedGroupID) {
-                            Text("Everyone (Worldwide)").tag(String?.none)
+                        Picker("Audience", selection: $audience) {
+                            Text("Private (Just Me)").tag(RatingAudience.privateOnly)
+                            Text("Worldwide").tag(RatingAudience.worldwide)
                             ForEach(store.myGroups) { group in
-                                Text(group.name).tag(String?.some(group.id))
+                                Text(group.name).tag(RatingAudience.group(group))
                             }
                         }
+                    } footer: {
+                        Text("Private ratings are only visible to you.")
                     }
 
                     Section {
@@ -130,17 +133,17 @@ struct AddLinkView: View {
         submitError = nil
         defer { isSubmitting = false }
         do {
-            let group = store.myGroups.first { $0.id == selectedGroupID }
             _ = try await store.submitRating(
                 for: item,
                 stars: stars,
                 note: note,
-                group: group,
+                audience: audience,
                 displayName: account.displayName
             )
             didSubmit = true
             stars = 0
             note = ""
+            audience = .privateOnly
             linkText = ""
             self.item = nil
         } catch {

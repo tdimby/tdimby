@@ -17,17 +17,24 @@ group of friends. Real accounts, backed by Firebase.
 - **Clipboard detection**: switch to MusicRate right after "Copy Link" in
   Spotify's share sheet, and the app offers to use that link immediately.
 - **Rate 1–5 stars** with an optional note.
-- **Worldwide ratings**: every rating you post without picking a group is
-  visible to (and counted for) everyone using the app.
+- **Private by default.** A new rating is visible only to you unless you
+  explicitly pick **Worldwide** or a specific group from the "Rate For"
+  picker — Worldwide isn't the default anymore, it's an opt-in choice.
 - **Groups**: create a group and share its 6-character invite code, or join
   one with a code someone shares with you — real, cross-device groups.
+- **Song of the Week**: inside a group, start a round, everyone submits a
+  song, everyone *except the submitter* rates it 1–5 stars, and whoever's
+  submission has the best average when the round closes wins — tracked on
+  a simple per-group leaderboard. A round auto-closes 7 days after it
+  starts (checked whenever a member opens the group — see "How weekly
+  rounds close" below for why it works that way instead of a real timer).
 - **Profile tab**: your rating history, display name, and account info.
 
-Two things asked for but not built yet — **private-by-default ratings**
-(right now, not posting to a group still means "Worldwide," same as
-before) and **weekly group song picks with voting** — are planned as the
-next two stages on top of this one; this stage is the account/backend
-foundation they both need.
+Privacy is enforced by Firestore's **security rules**
+(`firestore.rules`), not just by the app defaulting to Private in the
+UI — someone hitting the database directly (not through this app) still
+can't read another person's private ratings or a group's data without
+being a member. Details below.
 
 ## Project layout
 
@@ -36,7 +43,9 @@ MusicRate.swiftpm/
   Package.swift            App metadata (Swift Playgrounds app format)
   Sources/
     MusicRateApp.swift      App entry point
-    Models/                 SpotifyItem (+ MusicSource), Rating, RatingGroup
+    Models/
+      SpotifyItem.swift (+ MusicSource), Rating.swift (+ RatingAudience), RatingGroup.swift
+      WeeklyRound.swift        WeeklyRound, Submission, SubmissionRating, leaderboard entry
     Services/
       FirebaseConfig.swift          Your Firebase project's API key/ID
       FirebaseAuthService.swift     Email/password auth via Firebase's REST API
@@ -44,10 +53,12 @@ MusicRate.swiftpm/
       FirestoreValue.swift          Converts to/from Firestore's typed field format
       AccountStore.swift            Signed-in session + profile
       MusicStore.swift              Ratings/groups/songs, Firestore-backed
+      WeeklyPickStore.swift         Weekly round submissions/ratings/leaderboard
       SpotifyLinkParser.swift       Extracts track/album/... IDs from links
       SpotifyMetadataService.swift  Looks up title/artist/art via oEmbed
       AppleMusicSearchService.swift Search + starter list via iTunes Search
     Views/                  SwiftUI screens (Sign In, Feed, Search, Paste Link, Groups, Profile)
+  firestore.rules          Security rules - the real enforcement of privacy/groups
 ```
 
 ## Setup: connect your Firebase project
@@ -63,22 +74,32 @@ without this — only sign-in/accounts need it).
 3. **Build → Firestore Database** → **Create database** → start in
    **production mode** → any location.
 4. Firestore's **Rules** tab → replace the contents with the
-   `firestore.rules` file provided alongside this project → **Publish**.
-   (This stage's rules are permissive-but-authenticated — any signed-in
-   account can read/write anything. Real per-group/private restrictions
-   are added when the privacy stage lands.)
-5. Firestore's **Indexes** tab → **Create index**, three times, matching
-   these exactly (collection ID `ratings` for all three; scope
-   "Collection"):
-   - Fields: `songID` Ascending, `groupID` Ascending, `createdAt` Descending
-   - Fields: `groupID` Ascending, `createdAt` Descending
-   - Fields: `userID` Ascending, `createdAt` Descending
+   `firestore.rules` file included in this project → **Publish**. This is
+   what actually enforces privacy/group membership server-side (not just
+   the app's UI) — see "How privacy is actually enforced" below for what
+   each rule does. I wasn't able to test these against a live Firestore
+   project or the Rules Playground, so before trusting them with real
+   data: open Firestore → **Rules** → **Rules Playground** in the Firebase
+   Console and simulate a few reads/writes (e.g. "can user A read user B's
+   private rating?" should be **denied**; "can a group member read that
+   group's ratings?" should be **allowed**) to confirm they behave as
+   intended, and adjust if not.
+5. Firestore's **Indexes** tab → **Create index**, four times, scope
+   "Collection" each time:
+   - Collection `ratings` — Fields: `songID` Ascending, `groupID`
+     Ascending, `createdAt` Descending
+   - Collection `ratings` — Fields: `groupID` Ascending, `createdAt`
+     Descending
+   - Collection `ratings` — Fields: `userID` Ascending, `createdAt`
+     Descending
+   - Collection `weeklyRounds` — Fields: `groupID` Ascending,
+     `weekStartDate` Descending
 
    (Without these, the app's queries fail with a Firestore
    "FAILED_PRECONDITION: query requires an index" error — Firestore's own
    error normally includes a link that creates the exact index for you,
    which is a faster way to do this than typing them in by hand if you'd
-   rather just hit the error once and tap the link each time.)
+   rather just hit the error once per index and tap the link each time.)
 6. Project Settings (gear icon, top of the left sidebar) → **General** tab
    → scroll to "Your apps" → click **`</>`** (the Web icon) to register a
    web app (yes, even though MusicRate is an iOS app — this is just how
@@ -120,15 +141,62 @@ than real curated charts.
 (Spotify's oEmbed endpoint is public) and still resolves real Spotify
 links directly.
 
+## How privacy is actually enforced
+
+A rating's `groupID` field is one of: `"private"` (default), `"worldwide"`,
+or a real group's document ID (see `RatingAudience` in `Rating.swift`).
+`firestore.rules` reads that field to decide who can read a given rating
+document:
+
+- Always readable by its own author (`resource.data.userID == request.auth.uid`).
+- If `groupID == "worldwide"`, readable by anyone signed in.
+- Otherwise (a real group ID), readable only if the requester has a
+  membership document for that group (`isGroupMember()` in the rules file)
+  — `"private"` never matches this branch, so it's never readable by
+  anyone but its author.
+
+The same membership check gates group/round/submission reads and writes
+throughout the file — e.g. you can't post a rating to a group's `groupID`
+you don't belong to, and you can't submit or read weekly-round data for a
+group you're not in. `submissionRatings` additionally checks (server-side,
+not just in `WeeklyPickStore.rateSubmission`) that you're not the person
+who submitted the song you're trying to rate.
+
+This is why the setup section above says to actually test the rules in
+the Rules Playground before trusting them — I wrote them carefully but
+have no way to run them against a real project from here.
+
+## How weekly rounds close
+
+There's no server in this app — no Cloud Functions, no cron — so a round
+can't close itself the instant 7 days pass. Instead, `WeeklyPickStore.load`
+checks the elapsed time whenever any member opens the group; if a round is
+older than 7 days and still open, that member's device resolves it right
+then (tallies each submission's average rating, picks the highest, marks
+the round closed) before showing the group screen. In practice this means
+a round closes on the next visit after its week is up, not the literal
+moment the week ends — a few hours to a few days of drift depending on how
+often the group opens the app, not multiple weeks. Any member can also
+close a round early with **Close Round & Reveal Winner**.
+
+The leaderboard itself isn't a stored counter (no risk of it drifting out
+of sync) — `WeeklyPickStore.loadLeaderboard` recomputes each member's win
+count from scratch each time by walking the group's resolved rounds, which
+is simpler and always correct at the cost of a few extra reads for groups
+with a long history.
+
 ## Design notes & limitations
 
 - **No custom Share Extension.** Swift Playgrounds app projects can only
   contain a single app target, so Spotify can't "Share ▸ MusicRate"
   directly. Instead, the app watches the clipboard for a Spotify link.
-- **Not private yet.** Every rating not posted to a group is visible to
-  everyone in Worldwide — the "private by default, opt-in to Worldwide"
-  model is planned but not built in this stage.
-- **No weekly group picks yet** — also planned, not built in this stage.
+- **One round of weekly picks at a time per group** — there's no history
+  view for past rounds beyond the leaderboard's win tally; the songs
+  themselves from resolved rounds aren't shown anywhere after the fact.
+- **Submitting to a round is Paste Link only** (not Search) — reuses
+  `SpotifyLinkParser`/`SpotifyMetadataService` directly; adding a search
+  option there would just mean swapping in `AppleMusicSearchService` the
+  same way the Search tab already does.
 - The Firebase API key is stored in source (see "Setup" above for why
   that's fine) but note there's currently no Keychain-backed secure
   storage for the session's refresh token either — it's in UserDefaults,
