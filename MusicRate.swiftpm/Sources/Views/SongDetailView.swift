@@ -78,7 +78,7 @@ struct SongDetailView: View {
             let groupID = group?.id ?? worldwideGroupID
             ratings = try await store.ratings(forSongID: item.spotifyID, groupID: groupID)
             summary = RatingSummary(ratings: ratings)
-            if let userID = store.currentUserID, let mine = ratings.first(where: { $0.userID == userID }) {
+            if let mine = ratings.first(where: { $0.userID == store.currentUserID }) {
                 myStars = mine.stars
                 myNote = mine.note ?? ""
             }

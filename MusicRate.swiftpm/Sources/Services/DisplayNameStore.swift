@@ -1,8 +1,7 @@
 import Foundation
 
-/// The name shown next to your ratings. Kept locally — CloudKit's real
-/// identity APIs need extra entitlements this Playgrounds app doesn't
-/// request, so MusicRate asks for a nickname instead.
+/// The name shown next to your ratings. There's no account system, so
+/// MusicRate just asks you to pick a nickname instead.
 final class DisplayNameStore: ObservableObject {
     private static let key = "musicrate.displayName"
 

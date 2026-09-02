@@ -16,10 +16,10 @@ struct ProfileView: View {
 
                 Section {
                     HStack {
-                        Text("iCloud Status")
+                        Text("Storage")
                         Spacer()
-                        Text(store.isSignedInToiCloud ? "Signed In" : "Not Signed In")
-                            .foregroundStyle(store.isSignedInToiCloud ? .green : .red)
+                        Text("On this device")
+                            .foregroundStyle(.secondary)
                     }
                     HStack {
                         Text("Ratings Given")

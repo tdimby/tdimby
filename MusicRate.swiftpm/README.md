@@ -32,7 +32,7 @@ MusicRate.swiftpm/
     Services/
       SpotifyLinkParser.swift      Extracts track/album/... IDs from links
       SpotifyMetadataService.swift Looks up title/artist/art via oEmbed
-      MusicStore.swift             CloudKit-backed data layer
+      MusicStore.swift             Local JSON-backed data layer
       DisplayNameStore.swift       Local nickname storage
     Views/                  SwiftUI screens (Feed, Add & Rate, Groups, Profile)
 ```
@@ -43,33 +43,32 @@ Open `MusicRate.swiftpm` on an iPad in **Swift Playgrounds**, or open the
 folder in **Xcode 14+** (File ▸ Open, pick the `.swiftpm` folder) and run it
 in the simulator or on a device.
 
-## Required setup: CloudKit
+## How data is stored (and why)
 
-Worldwide and group ratings are stored in CloudKit's **public database** so
-every install of the app shares the same data. Swift Playgrounds' app
-format doesn't expose an iCloud/CloudKit capability toggle, so you need to
-add it once after opening the project in Xcode:
+Ratings, songs, and groups are all stored as a single JSON file in the app's
+Documents folder (see `MusicStore.swift`) — no server, no account, no
+special entitlement. That keeps the app runnable straight out of Swift
+Playgrounds with zero setup, but it also means "worldwide" really means
+*"everyone who's rated something in this app on this device"* — there's no
+syncing between installs or devices yet.
 
-1. Open the project in Xcode.
-2. Select the app target ▸ **Signing & Capabilities** ▸ **+ Capability** ▸
-   add **iCloud**, then enable the **CloudKit** service and create/select a
-   container.
-3. Build and run once — this creates the record types
-   (`Song`, `Rating`, `RatingGroup`, `GroupMembership`) in the CloudKit
-   Dashboard's *development* schema the first time each is saved.
-4. In the [CloudKit Dashboard](https://icloud.developer.apple.com/), mark
-   these fields **Queryable** (and **Sortable** where noted) so the app's
-   queries work:
-   - `Rating`: `songID` (queryable), `groupID` (queryable), `userID`
-     (queryable), `createdAt` (queryable + sortable)
-   - `RatingGroup`: `inviteCode` (queryable)
-   - `GroupMembership`: `userID` (queryable)
-5. When you're ready to ship, deploy the schema to the *production*
-   environment from the dashboard.
+This wasn't the original plan — the first version used CloudKit's public
+database so ratings really would sync across everyone's installs. That
+version got stuck loading and got killed after a few seconds inside Swift
+Playgrounds. The likely cause: the app called CloudKit
+(`CKContainer.default().userRecordID()`) on launch, and Swift Playgrounds
+has no way to grant an app the iCloud/CloudKit capability at all — it's
+simply missing from its capability list, unlike Xcode. Without that
+entitlement, the CloudKit call seems to hang rather than fail cleanly.
 
-Until iCloud is signed in on the device/simulator, the app shows an alert
-and ratings can't be posted — everything else (looking up links) still
-works.
+If you want real cross-device/cross-person sharing, the natural next step
+is to open this project in Xcode on a Mac (which *can* grant iCloud
+capabilities), swap `MusicStore` back to a CloudKit- or server-backed
+implementation, and add the iCloud capability under **Signing &
+Capabilities**. The rest of the app (all the SwiftUI views) talks to
+`MusicStore` through a small async API (`submitRating`, `feed(for:)`,
+`createGroup`, `joinGroup`, …) and doesn't know or care how it's persisted,
+so that swap shouldn't require touching any view code.
 
 ## Design notes & limitations
 
@@ -79,15 +78,11 @@ works.
   (a common pattern: tap Share ▸ Copy Link in Spotify, switch to MusicRate).
   If you convert this into a full Xcode project, adding a real Share
   Extension target is a natural next step.
-- **Identity is a nickname, not a real account.** Reading a user's iCloud
-  name requires extra entitlements this project doesn't request, so
-  MusicRate asks you to pick a display name instead. Anyone can type any
-  name — there's no verification.
-- **Groups aren't access-controlled.** Group ratings live in the same
-  public database, scoped only by a `groupID` field the app filters on.
-  Anyone who knows a group's CloudKit record name could technically query
-  its ratings directly. For real privacy, a future version could use
-  `CKShare` and a private/shared database per group instead.
+- **Data is local to this install.** See "How data is stored" above —
+  ratings don't currently leave the device they were made on.
+- **Identity is a nickname, not a real account.** Anyone can type any name
+  in Profile — there's no verification, and a fresh install gets a new
+  random local user ID.
 - Track/album/playlist metadata comes from Spotify's oEmbed endpoint, which
   is unauthenticated and doesn't require registering a Spotify Developer
   app — but it also only exposes what's needed for an embed preview (title,

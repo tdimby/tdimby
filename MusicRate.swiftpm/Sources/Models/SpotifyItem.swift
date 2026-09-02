@@ -1,5 +1,4 @@
 import Foundation
-import CloudKit
 
 enum SpotifyItemKind: String, Codable, CaseIterable, Hashable {
     case track, album, playlist, artist, show, episode
@@ -36,28 +35,6 @@ struct SpotifyItem: Identifiable, Codable, Hashable {
     var subtitle: String
     var artworkURL: URL?
     var spotifyURL: URL
-
-    init?(record: CKRecord) {
-        guard
-            let spotifyID = record["spotifyID"] as? String,
-            let kindRaw = record["kind"] as? String,
-            let kind = SpotifyItemKind(rawValue: kindRaw),
-            let title = record["title"] as? String,
-            let urlString = record["spotifyURL"] as? String,
-            let spotifyURL = URL(string: urlString)
-        else { return nil }
-
-        self.spotifyID = spotifyID
-        self.kind = kind
-        self.title = title
-        self.subtitle = record["subtitle"] as? String ?? kind.displayName
-        if let artworkString = record["artworkURL"] as? String {
-            self.artworkURL = URL(string: artworkString)
-        } else {
-            self.artworkURL = nil
-        }
-        self.spotifyURL = spotifyURL
-    }
 
     init(spotifyID: String, kind: SpotifyItemKind, title: String, subtitle: String, artworkURL: URL?, spotifyURL: URL) {
         self.spotifyID = spotifyID
