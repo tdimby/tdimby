@@ -2,17 +2,20 @@ import Foundation
 
 enum SpotifyAuthError: LocalizedError {
     case missingCredentials
-    case requestFailed
+    case transportFailed(String)
+    case httpError(Int)
     case invalidCredentials
 
     var errorDescription: String? {
         switch self {
         case .missingCredentials:
             return "Add your Spotify API keys in Search settings first."
-        case .requestFailed:
-            return "Couldn't reach Spotify to authenticate. Check your connection."
+        case .transportFailed(let detail):
+            return "Couldn't reach Spotify to authenticate: \(detail)"
+        case .httpError(let status):
+            return "Spotify's login server returned an error (HTTP \(status))."
         case .invalidCredentials:
-            return "Spotify rejected those API keys. Double-check the Client ID and Secret."
+            return "Spotify rejected those API keys (HTTP 400/401). Double-check the Client ID and Secret in Search settings — a stray space or truncated character is the usual cause."
         }
     }
 }
@@ -49,14 +52,18 @@ actor SpotifyAuthService {
         do {
             (data, response) = try await URLSession.shared.data(for: request)
         } catch {
-            throw SpotifyAuthError.requestFailed
+            throw SpotifyAuthError.transportFailed(error.localizedDescription)
         }
 
-        guard let http = response as? HTTPURLResponse else { throw SpotifyAuthError.requestFailed }
+        guard let http = response as? HTTPURLResponse else {
+            throw SpotifyAuthError.transportFailed("no HTTP response")
+        }
         guard http.statusCode != 400, http.statusCode != 401 else {
             throw SpotifyAuthError.invalidCredentials
         }
-        guard (200..<300).contains(http.statusCode) else { throw SpotifyAuthError.requestFailed }
+        guard (200..<300).contains(http.statusCode) else {
+            throw SpotifyAuthError.httpError(http.statusCode)
+        }
 
         struct TokenResponse: Decodable {
             let accessToken: String
@@ -69,7 +76,7 @@ actor SpotifyAuthService {
         }
 
         guard let decoded = try? JSONDecoder().decode(TokenResponse.self, from: data) else {
-            throw SpotifyAuthError.requestFailed
+            throw SpotifyAuthError.httpError(http.statusCode)
         }
 
         cachedToken = decoded.accessToken
