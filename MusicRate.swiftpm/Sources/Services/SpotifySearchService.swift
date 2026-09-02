@@ -90,13 +90,14 @@ enum SpotifySearchService {
         guard !trimmed.isEmpty else { return [] }
 
         var components = URLComponents(string: "https://api.spotify.com/v1/search")!
-        components.queryItems = [
-            URLQueryItem(name: "q", value: trimmed),
+        components.percentEncodedQueryItems = [
+            URLQueryItem(name: "q", value: percentEncode(trimmed)),
             URLQueryItem(name: "type", value: type.rawValue),
             URLQueryItem(name: "limit", value: "25")
         ]
+        guard let url = components.url else { throw SpotifySearchError.decodingFailed }
 
-        let decoded: SearchResponse = try await get(url: components.url!, clientID: clientID, clientSecret: clientSecret)
+        let decoded: SearchResponse = try await get(url: url, clientID: clientID, clientSecret: clientSecret)
 
         switch type {
         case .track:
@@ -139,9 +140,10 @@ enum SpotifySearchService {
 
     static func newReleases(clientID: String, clientSecret: String) async throws -> [SpotifyItem] {
         var components = URLComponents(string: "https://api.spotify.com/v1/browse/new-releases")!
-        components.queryItems = [URLQueryItem(name: "limit", value: "25")]
+        components.percentEncodedQueryItems = [URLQueryItem(name: "limit", value: "25")]
+        guard let url = components.url else { throw SpotifySearchError.decodingFailed }
 
-        let decoded: NewReleasesResponse = try await get(url: components.url!, clientID: clientID, clientSecret: clientSecret)
+        let decoded: NewReleasesResponse = try await get(url: url, clientID: clientID, clientSecret: clientSecret)
         return decoded.albums.items.compactMap { $0 }.map { album in
             SpotifyItem(
                 spotifyID: album.id,
@@ -152,6 +154,19 @@ enum SpotifySearchService {
                 spotifyURL: URL(string: album.externalURLs.spotify) ?? SpotifyLinkParser.canonicalURL(kind: .album, id: album.id)
             )
         }
+    }
+
+    /// `URLComponents.queryItems` leaves characters like `&`, `+`, `#`, and
+    /// `=` unescaped inside a value (they're legal in a raw query string per
+    /// RFC 3986), which can corrupt the *other* query parameters once
+    /// Spotify's server parses the URL. Percent-encoding search text
+    /// ourselves against a stricter allowed set — then assigning it via
+    /// `percentEncodedQueryItems`, which Foundation trusts as already
+    /// encoded — avoids that entirely.
+    private static func percentEncode(_ value: String) -> String {
+        var allowed = CharacterSet.urlQueryAllowed
+        allowed.remove(charactersIn: "&+#=?/")
+        return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
     }
 
     private static func get<T: Decodable>(url: URL, clientID: String, clientSecret: String, isRetry: Bool = false) async throws -> T {
