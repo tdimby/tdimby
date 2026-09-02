@@ -1,11 +1,14 @@
 import Foundation
 
 enum MusicStoreError: LocalizedError {
+    case notSignedIn
     case invalidGroupName
     case invalidInviteCode
 
     var errorDescription: String? {
         switch self {
+        case .notSignedIn:
+            return "Sign in first."
         case .invalidGroupName:
             return "Give your group a name."
         case .invalidInviteCode:
@@ -14,87 +17,100 @@ enum MusicStoreError: LocalizedError {
     }
 }
 
-private struct Membership: Codable {
-    let groupID: String
-    let userID: String
-    let joinedAt: Date
-}
-
-private struct LocalDatabase: Codable {
-    var songs: [String: SpotifyItem] = [:]
-    var ratings: [String: Rating] = [:]
-    var groups: [String: RatingGroup] = [:]
-    var memberships: [Membership] = []
-}
-
-/// Stores everything as a JSON file in the app's Documents folder — no
-/// server, no account, no special entitlement required. That also means
-/// "worldwide" only means "everyone who's rated something on this device":
-/// there's no shared backend behind it. Swap this out for CloudKit or a
-/// real API once you're building this in Xcode rather than Swift
-/// Playgrounds — see the README for why it isn't wired up that way already.
+/// Backs the app with Firestore. `groupID` on a rating is
+/// `worldwideGroupID` for ratings visible to everyone, or a group's
+/// document ID for ratings scoped to that group only. (Stage 1: storage
+/// only, same visibility rules as before - the private-by-default model
+/// comes in stage 2.)
 @MainActor
 final class MusicStore: ObservableObject {
-    private let fileURL: URL
-    private var db: LocalDatabase
+    private let account: AccountStore
+    private var songCache: [String: SpotifyItem] = [:]
 
-    let currentUserID: String
     @Published var myGroups: [RatingGroup] = []
     @Published var worldwideFeed: [FeedItem] = []
     @Published var myRatings: [Rating] = []
     @Published var lastError: String?
 
-    init() {
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        fileURL = documents.appendingPathComponent("musicrate.json")
-        currentUserID = Self.loadOrCreateUserID()
-        db = Self.loadDatabase(from: fileURL)
-        refreshAll()
+    init(account: AccountStore) {
+        self.account = account
     }
 
+    private var currentUserID: String? { account.userID }
+
     func start() async {
-        refreshAll()
+        guard account.isSignedIn else { return }
+        await refreshMyGroups()
+        await refreshWorldwideFeed()
+        await refreshMyRatings()
     }
 
     // MARK: - Songs
 
     @discardableResult
     func upsertSong(_ item: SpotifyItem) async throws -> SpotifyItem {
-        db.songs[item.spotifyID] = item
-        save()
+        let token = try await account.validIDToken()
+        try await FirestoreService.setDocument(path: "songs/\(item.spotifyID)", fields: songFields(item), idToken: token)
+        songCache[item.spotifyID] = item
         return item
+    }
+
+    private func fetchSongs(ids: some Sequence<String>) async {
+        let token = try? await account.validIDToken()
+        guard let token else { return }
+        let missing = Set(ids).subtracting(songCache.keys)
+        for id in missing {
+            if let doc = try? await FirestoreService.getDocument(path: "songs/\(id)", idToken: token),
+               let item = song(from: doc) {
+                songCache[item.spotifyID] = item
+            }
+        }
     }
 
     // MARK: - Ratings
 
     @discardableResult
     func submitRating(for item: SpotifyItem, stars: Int, note: String?, group: RatingGroup?, displayName: String) async throws -> Rating {
+        guard let userID = currentUserID else { throw MusicStoreError.notSignedIn }
         try await upsertSong(item)
+        let token = try await account.validIDToken()
 
         let groupID = group?.id ?? worldwideGroupID
-        let id = "\(currentUserID)_\(item.spotifyID)_\(groupID)"
+        let ratingID = "\(userID)_\(item.spotifyID)_\(groupID)"
         let trimmedNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let rating = Rating(
-            id: id,
-            songID: item.spotifyID,
-            userID: currentUserID,
-            userName: displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Anonymous" : displayName,
-            stars: stars,
-            note: (trimmedNote?.isEmpty ?? true) ? nil : trimmedNote,
-            groupID: groupID,
-            createdAt: db.ratings[id]?.createdAt ?? Date()
+        let existing = try? await FirestoreService.getDocument(path: "ratings/\(ratingID)", idToken: token)
+        let createdAt = (existing?.fields["createdAt"] as? Date) ?? Date()
+
+        let doc = try await FirestoreService.setDocument(
+            path: "ratings/\(ratingID)",
+            fields: [
+                "songID": item.spotifyID,
+                "userID": userID,
+                "userName": displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Anonymous" : displayName,
+                "stars": stars,
+                "note": (trimmedNote?.isEmpty ?? true) ? nil : trimmedNote,
+                "groupID": groupID,
+                "createdAt": createdAt
+            ],
+            idToken: token
         )
-        db.ratings[id] = rating
-        save()
-        refreshWorldwideFeedNow()
-        refreshMyRatingsNow()
+        guard let rating = rating(from: doc) else { throw FirestoreError.decodingFailed }
+
+        await refreshWorldwideFeed()
+        await refreshMyRatings()
         return rating
     }
 
     func ratings(forSongID songID: String, groupID: String) async throws -> [Rating] {
-        db.ratings.values
-            .filter { $0.songID == songID && $0.groupID == groupID }
-            .sorted { $0.createdAt > $1.createdAt }
+        let token = try await account.validIDToken()
+        let docs = try await FirestoreService.query(
+            collectionPath: "ratings",
+            equals: ["songID": songID, "groupID": groupID],
+            orderBy: "createdAt",
+            descending: true,
+            idToken: token
+        )
+        return docs.compactMap(rating(from:))
     }
 
     func summary(forSongID songID: String, groupID: String) async throws -> RatingSummary {
@@ -102,117 +118,197 @@ final class MusicStore: ObservableObject {
     }
 
     func feed(for group: RatingGroup?, limit: Int = 50) async throws -> [FeedItem] {
-        feedItems(groupID: group?.id ?? worldwideGroupID, limit: limit)
+        let token = try await account.validIDToken()
+        let groupID = group?.id ?? worldwideGroupID
+        let docs = try await FirestoreService.query(
+            collectionPath: "ratings",
+            equals: ["groupID": groupID],
+            orderBy: "createdAt",
+            descending: true,
+            limit: limit,
+            idToken: token
+        )
+        let ratings = docs.compactMap(rating(from:))
+        await fetchSongs(ids: ratings.map(\.songID))
+        return ratings.compactMap { rating in
+            songCache[rating.songID].map { FeedItem(rating: rating, item: $0) }
+        }
     }
 
     func refreshWorldwideFeed() async {
-        refreshWorldwideFeedNow()
+        do {
+            worldwideFeed = try await feed(for: nil)
+        } catch {
+            lastError = error.localizedDescription
+        }
     }
 
     func myFeedItems() async -> [FeedItem] {
-        myRatings.compactMap { rating in
-            db.songs[rating.songID].map { FeedItem(rating: rating, item: $0) }
+        await fetchSongs(ids: myRatings.map(\.songID))
+        return myRatings.compactMap { rating in
+            songCache[rating.songID].map { FeedItem(rating: rating, item: $0) }
         }
     }
 
     func refreshMyRatings() async {
-        refreshMyRatingsNow()
+        guard let userID = currentUserID else { return }
+        do {
+            let token = try await account.validIDToken()
+            let docs = try await FirestoreService.query(
+                collectionPath: "ratings",
+                equals: ["userID": userID],
+                orderBy: "createdAt",
+                descending: true,
+                limit: 100,
+                idToken: token
+            )
+            myRatings = docs.compactMap(rating(from:))
+        } catch {
+            lastError = error.localizedDescription
+        }
     }
 
     // MARK: - Groups
 
     func refreshMyGroups() async {
-        refreshMyGroupsNow()
+        guard let userID = currentUserID else { return }
+        do {
+            let token = try await account.validIDToken()
+            let memberships = try await FirestoreService.query(
+                collectionPath: "memberships",
+                equals: ["userID": userID],
+                idToken: token
+            )
+            let groupIDs = memberships.compactMap { $0.fields["groupID"] as? String }
+            var groups: [RatingGroup] = []
+            for groupID in groupIDs {
+                if let doc = try? await FirestoreService.getDocument(path: "groups/\(groupID)", idToken: token),
+                   let group = group(from: doc) {
+                    groups.append(group)
+                }
+            }
+            myGroups = groups.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        } catch {
+            lastError = error.localizedDescription
+        }
     }
 
     func createGroup(name: String) async throws -> RatingGroup {
+        guard let userID = currentUserID else { throw MusicStoreError.notSignedIn }
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw MusicStoreError.invalidGroupName }
+        let token = try await account.validIDToken()
 
-        let group = RatingGroup(
-            id: UUID().uuidString,
-            name: trimmed,
-            inviteCode: Self.randomInviteCode(),
-            ownerUserID: currentUserID,
-            createdAt: Date()
+        let groupID = UUID().uuidString
+        let doc = try await FirestoreService.setDocument(
+            path: "groups/\(groupID)",
+            fields: [
+                "name": trimmed,
+                "inviteCode": Self.randomInviteCode(),
+                "ownerUserID": userID,
+                "createdAt": Date()
+            ],
+            idToken: token
         )
-        db.groups[group.id] = group
-        join(group: group)
-        save()
-        refreshMyGroupsNow()
+        guard let group = group(from: doc) else { throw FirestoreError.decodingFailed }
+
+        try await join(group: group, userID: userID, token: token)
+        await refreshMyGroups()
         return group
     }
 
     func joinGroup(inviteCode: String) async throws -> RatingGroup {
+        guard let userID = currentUserID else { throw MusicStoreError.notSignedIn }
         let code = inviteCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        guard let group = db.groups.values.first(where: { $0.inviteCode == code }) else {
+        guard !code.isEmpty else { throw MusicStoreError.invalidInviteCode }
+        let token = try await account.validIDToken()
+
+        let matches = try await FirestoreService.query(collectionPath: "groups", equals: ["inviteCode": code], limit: 1, idToken: token)
+        guard let doc = matches.first, let group = group(from: doc) else {
             throw MusicStoreError.invalidInviteCode
         }
-        join(group: group)
-        save()
-        refreshMyGroupsNow()
+
+        try await join(group: group, userID: userID, token: token)
+        await refreshMyGroups()
         return group
     }
 
-    private func join(group: RatingGroup) {
-        guard !db.memberships.contains(where: { $0.groupID == group.id && $0.userID == currentUserID }) else { return }
-        db.memberships.append(Membership(groupID: group.id, userID: currentUserID, joinedAt: Date()))
+    private func join(group: RatingGroup, userID: String, token: String) async throws {
+        try await FirestoreService.setDocument(
+            path: "memberships/\(group.id)_\(userID)",
+            fields: ["groupID": group.id, "userID": userID, "joinedAt": Date()],
+            idToken: token
+        )
     }
 
-    // MARK: - Derived state
+    // MARK: - Firestore <-> model mapping
 
-    private func refreshAll() {
-        refreshMyGroupsNow()
-        refreshWorldwideFeedNow()
-        refreshMyRatingsNow()
+    private func songFields(_ item: SpotifyItem) -> [String: Any?] {
+        [
+            "spotifyID": item.spotifyID,
+            "kind": item.kind.rawValue,
+            "title": item.title,
+            "subtitle": item.subtitle,
+            "artworkURL": item.artworkURL?.absoluteString,
+            "spotifyURL": item.spotifyURL.absoluteString,
+            "source": item.source.rawValue
+        ]
     }
 
-    private func refreshMyGroupsNow() {
-        let groupIDs = Set(db.memberships.filter { $0.userID == currentUserID }.map(\.groupID))
-        myGroups = db.groups.values
-            .filter { groupIDs.contains($0.id) }
-            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-    }
-
-    private func refreshWorldwideFeedNow() {
-        worldwideFeed = feedItems(groupID: worldwideGroupID, limit: 50)
-    }
-
-    private func refreshMyRatingsNow() {
-        myRatings = db.ratings.values
-            .filter { $0.userID == currentUserID }
-            .sorted { $0.createdAt > $1.createdAt }
-    }
-
-    private func feedItems(groupID: String, limit: Int) -> [FeedItem] {
-        db.ratings.values
-            .filter { $0.groupID == groupID }
-            .sorted { $0.createdAt > $1.createdAt }
-            .prefix(limit)
-            .compactMap { rating in db.songs[rating.songID].map { FeedItem(rating: rating, item: $0) } }
-    }
-
-    // MARK: - Persistence
-
-    private func save() {
-        guard let data = try? JSONEncoder().encode(db) else { return }
-        try? data.write(to: fileURL, options: .atomic)
-    }
-
-    private static func loadDatabase(from url: URL) -> LocalDatabase {
+    private func song(from doc: FirestoreDocument) -> SpotifyItem? {
+        let fields = doc.fields
         guard
-            let data = try? Data(contentsOf: url),
-            let db = try? JSONDecoder().decode(LocalDatabase.self, from: data)
-        else { return LocalDatabase() }
-        return db
+            let spotifyID = fields["spotifyID"] as? String,
+            let kindRaw = fields["kind"] as? String,
+            let kind = SpotifyItemKind(rawValue: kindRaw),
+            let title = fields["title"] as? String,
+            let urlString = fields["spotifyURL"] as? String,
+            let spotifyURL = URL(string: urlString)
+        else { return nil }
+        let artworkURL = (fields["artworkURL"] as? String).flatMap(URL.init(string:))
+        let source = (fields["source"] as? String).flatMap(MusicSource.init(rawValue:)) ?? .spotify
+        return SpotifyItem(
+            spotifyID: spotifyID,
+            kind: kind,
+            title: title,
+            subtitle: fields["subtitle"] as? String ?? kind.displayName,
+            artworkURL: artworkURL,
+            spotifyURL: spotifyURL,
+            source: source
+        )
     }
 
-    private static func loadOrCreateUserID() -> String {
-        let key = "musicrate.userID"
-        if let existing = UserDefaults.standard.string(forKey: key) { return existing }
-        let id = UUID().uuidString
-        UserDefaults.standard.set(id, forKey: key)
-        return id
+    private func rating(from doc: FirestoreDocument) -> Rating? {
+        let fields = doc.fields
+        guard
+            let songID = fields["songID"] as? String,
+            let userID = fields["userID"] as? String,
+            let userName = fields["userName"] as? String,
+            let stars = fields["stars"] as? Int,
+            let groupID = fields["groupID"] as? String,
+            let createdAt = fields["createdAt"] as? Date
+        else { return nil }
+        return Rating(
+            id: doc.id,
+            songID: songID,
+            userID: userID,
+            userName: userName,
+            stars: stars,
+            note: fields["note"] as? String,
+            groupID: groupID,
+            createdAt: createdAt
+        )
+    }
+
+    private func group(from doc: FirestoreDocument) -> RatingGroup? {
+        let fields = doc.fields
+        guard
+            let name = fields["name"] as? String,
+            let inviteCode = fields["inviteCode"] as? String,
+            let ownerUserID = fields["ownerUserID"] as? String,
+            let createdAt = fields["createdAt"] as? Date
+        else { return nil }
+        return RatingGroup(id: doc.id, name: name, inviteCode: inviteCode, ownerUserID: ownerUserID, createdAt: createdAt)
     }
 
     private static func randomInviteCode(length: Int = 6) -> String {

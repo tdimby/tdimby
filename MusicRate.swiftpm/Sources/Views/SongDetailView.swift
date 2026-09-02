@@ -5,7 +5,7 @@ struct SongDetailView: View {
     let group: RatingGroup?
 
     @EnvironmentObject var store: MusicStore
-    @EnvironmentObject var displayNameStore: DisplayNameStore
+    @EnvironmentObject var account: AccountStore
 
     @State private var ratings: [Rating] = []
     @State private var summary = RatingSummary.empty
@@ -20,6 +20,11 @@ struct SongDetailView: View {
                 SongRow(item: item)
                 Link(destination: item.spotifyURL) {
                     Label("Open in \(item.source.displayName)", systemImage: "arrow.up.right.square")
+                }
+                if item.source != .spotify {
+                    Link(destination: SpotifyLinkParser.searchURL(for: "\(item.title) \(item.subtitle)")) {
+                        Label("Search on Spotify", systemImage: "magnifyingglass")
+                    }
                 }
             }
 
@@ -78,7 +83,7 @@ struct SongDetailView: View {
             let groupID = group?.id ?? worldwideGroupID
             ratings = try await store.ratings(forSongID: item.spotifyID, groupID: groupID)
             summary = RatingSummary(ratings: ratings)
-            if let mine = ratings.first(where: { $0.userID == store.currentUserID }) {
+            if let mine = ratings.first(where: { $0.userID == account.userID }) {
                 myStars = mine.stars
                 myNote = mine.note ?? ""
             }
@@ -96,7 +101,7 @@ struct SongDetailView: View {
                 stars: myStars,
                 note: myNote,
                 group: group,
-                displayName: displayNameStore.name
+                displayName: account.displayName
             )
             await load()
         } catch {

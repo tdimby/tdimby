@@ -5,7 +5,7 @@ import UIKit
 
 struct AddLinkView: View {
     @EnvironmentObject var store: MusicStore
-    @EnvironmentObject var displayNameStore: DisplayNameStore
+    @EnvironmentObject var account: AccountStore
 
     @State private var linkText = ""
     @State private var clipboardSuggestion: String?
@@ -136,7 +136,7 @@ struct AddLinkView: View {
                 stars: stars,
                 note: note,
                 group: group,
-                displayName: displayNameStore.name
+                displayName: account.displayName
             )
             didSubmit = true
             stars = 0

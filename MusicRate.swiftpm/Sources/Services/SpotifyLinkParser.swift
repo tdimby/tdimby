@@ -44,4 +44,15 @@ enum SpotifyLinkParser {
     static func canonicalURL(kind: SpotifyItemKind, id: String) -> URL {
         URL(string: "https://open.spotify.com/\(kind.rawValue)/\(id)")!
     }
+
+    /// A link to Spotify's own search for `text` (e.g. "title artist") —
+    /// not a direct link to a specific catalog item like `canonicalURL`,
+    /// but useful when all we know is a title/artist from another source
+    /// (like Apple Music search results) rather than a real Spotify ID.
+    static func searchURL(for text: String) -> URL {
+        var allowed = CharacterSet.urlPathAllowed
+        allowed.remove(charactersIn: "%")
+        let encoded = text.addingPercentEncoding(withAllowedCharacters: allowed) ?? text
+        return URL(string: "https://open.spotify.com/search/\(encoded)") ?? URL(string: "https://open.spotify.com/search")!
+    }
 }
