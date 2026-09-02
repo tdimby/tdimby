@@ -19,7 +19,7 @@ struct SongDetailView: View {
             Section {
                 SongRow(item: item)
                 Link(destination: item.spotifyURL) {
-                    Label("Open in Spotify", systemImage: "arrow.up.right.square")
+                    Label("Open in \(item.source.displayName)", systemImage: "arrow.up.right.square")
                 }
             }
 
