@@ -2,22 +2,22 @@ import Foundation
 
 enum SpotifySearchError: LocalizedError {
     case transportFailed(String)
-    case httpError(Int, String?)
+    case httpError(Int, String?, URL)
     case decodingFailed
 
     var errorDescription: String? {
         switch self {
         case .transportFailed(let detail):
             return "Couldn't reach Spotify's catalog: \(detail)"
-        case .httpError(let status, let body):
-            var message = "Spotify's catalog returned an error (HTTP \(status))."
+        case .httpError(let status, let body, let url):
+            var message = "HTTP \(status)\nURL: \(url.absoluteString)"
             if let body, !body.isEmpty {
-                message += " \(body)"
+                message += "\nBody: \(body)"
             }
             if status == 401 || status == 403 {
-                message += " Double-check your Client ID/Secret in Search settings."
+                message += "\nDouble-check your Client ID/Secret in Search settings."
             } else if status == 429 {
-                message += " You're being rate-limited — wait a bit and try again."
+                message += "\nYou're being rate-limited — wait a bit and try again."
             }
             return message
         case .decodingFailed:
@@ -193,7 +193,7 @@ enum SpotifySearchService {
                 return try await get(url: url, clientID: clientID, clientSecret: clientSecret, isRetry: true)
             }
             let body = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
-            throw SpotifySearchError.httpError(http.statusCode, body?.isEmpty == false ? String(body!.prefix(200)) : nil)
+            throw SpotifySearchError.httpError(http.statusCode, body?.isEmpty == false ? String(body!.prefix(200)) : nil, url)
         }
 
         do {
