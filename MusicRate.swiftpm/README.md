@@ -6,6 +6,10 @@ friends.
 
 ## Features
 
+- **Search the Spotify catalog** for songs, albums, or playlists right in
+  the app — no link needed. Opens on a "New Releases" browse list so
+  there's always something to look at. (Needs your own free Spotify API
+  keys — see "Search setup" below.)
 - **Paste a Spotify link** (track, album, or playlist) and MusicRate looks
   up its title, artist/owner, and artwork automatically via Spotify's public
   oEmbed endpoint — no API key or login required.
@@ -32,9 +36,12 @@ MusicRate.swiftpm/
     Services/
       SpotifyLinkParser.swift      Extracts track/album/... IDs from links
       SpotifyMetadataService.swift Looks up title/artist/art via oEmbed
+      SpotifyCredentialsStore.swift Local storage for your Spotify API keys
+      SpotifyAuthService.swift     Client Credentials OAuth for the Web API
+      SpotifySearchService.swift   Search + New Releases via the Web API
       MusicStore.swift             Local JSON-backed data layer
       DisplayNameStore.swift       Local nickname storage
-    Views/                  SwiftUI screens (Feed, Add & Rate, Groups, Profile)
+    Views/                  SwiftUI screens (Feed, Search, Paste Link, Groups, Profile)
 ```
 
 ## Running it
@@ -42,6 +49,29 @@ MusicRate.swiftpm/
 Open `MusicRate.swiftpm` on an iPad in **Swift Playgrounds**, or open the
 folder in **Xcode 14+** (File ▸ Open, pick the `.swiftpm` folder) and run it
 in the simulator or on a device.
+
+## Search setup: Spotify API keys
+
+The Search tab needs a real Spotify Web API access token, which needs a
+registered Spotify app (this is separate from, and in addition to, the
+oEmbed lookup the Paste Link tab uses — oEmbed has no search endpoint).
+
+1. Go to [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard)
+   and log in with any Spotify account (free is fine).
+2. Create an app. Any name/description works; for the redirect URI, put
+   anything like `https://example.com` — MusicRate never opens a login
+   screen, so it's never actually used.
+3. Open the app's Settings and copy its **Client ID** and **Client Secret**.
+4. In MusicRate, go to the **Search** tab ▸ tap the gear icon ▸ paste both
+   in ▸ Save.
+
+Under the hood this uses Spotify's **Client Credentials** flow
+(`SpotifyAuthService.swift`): it authenticates as the *app*, not as a
+person, so it can search the public catalog but can't see anyone's
+playlists, library, or account. The Client ID/Secret are stored in
+`UserDefaults` on-device for simplicity — fine for personal use, but don't
+ship an app built this way to other people without moving that to Keychain
+and keeping the secret server-side instead of in the client.
 
 ## How data is stored (and why)
 

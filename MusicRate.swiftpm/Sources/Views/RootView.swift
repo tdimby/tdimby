@@ -10,8 +10,11 @@ struct RootView: View {
             FeedView()
                 .tabItem { Label("Worldwide", systemImage: "globe") }
 
+            SearchView()
+                .tabItem { Label("Search", systemImage: "magnifyingglass") }
+
             AddLinkView()
-                .tabItem { Label("Add & Rate", systemImage: "plus.circle.fill") }
+                .tabItem { Label("Paste Link", systemImage: "link") }
 
             GroupsView()
                 .tabItem { Label("Groups", systemImage: "person.3.fill") }
