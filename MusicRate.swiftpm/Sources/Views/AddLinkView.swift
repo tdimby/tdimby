@@ -65,7 +65,7 @@ struct AddLinkView: View {
                         TextField("Add a note (optional)", text: $note, axis: .vertical)
                     }
 
-                    Section("Rate For") {
+                    Section {
                         Picker("Audience", selection: $audience) {
                             Text("Private (Just Me)").tag(RatingAudience.privateOnly)
                             Text("Worldwide").tag(RatingAudience.worldwide)
@@ -73,6 +73,8 @@ struct AddLinkView: View {
                                 Text(group.name).tag(RatingAudience.group(group))
                             }
                         }
+                    } header: {
+                        Text("Rate For")
                     } footer: {
                         Text("Private ratings are only visible to you.")
                     }

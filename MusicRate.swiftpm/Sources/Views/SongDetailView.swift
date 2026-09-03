@@ -42,7 +42,7 @@ struct SongDetailView: View {
                 }
             }
 
-            Section("Rate For") {
+            Section {
                 Picker("Audience", selection: $audience) {
                     Text("Private (Just Me)").tag(RatingAudience.privateOnly)
                     Text("Worldwide").tag(RatingAudience.worldwide)
@@ -62,6 +62,8 @@ struct SongDetailView: View {
                     }
                 }
                 .disabled(myStars == 0 || isSubmitting)
+            } header: {
+                Text("Rate For")
             } footer: {
                 Text("Private ratings are only visible to you.")
             }

@@ -87,7 +87,7 @@ enum FirestoreService {
         limit: Int? = nil,
         idToken: String
     ) async throws -> [FirestoreDocument] {
-        let segments = collectionPath.components(separatedBy: "/")
+        var segments = collectionPath.components(separatedBy: "/")
         let collectionID = segments.removeLast()
         let parentPath = segments.joined(separator: "/")
         let parentURL = parentPath.isEmpty ? baseURL : "\(baseURL)/\(parentPath)"
