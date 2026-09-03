@@ -11,6 +11,7 @@ final class AccountStore: ObservableObject {
     @Published private(set) var userID: String?
     @Published var displayName: String = ""
     @Published private(set) var email: String = ""
+    @Published private(set) var memberSince: Date?
     @Published var lastError: String?
     @Published private(set) var isRestoringSession = false
 
@@ -84,6 +85,7 @@ final class AccountStore: ObservableObject {
         refreshToken = nil
         displayName = ""
         email = ""
+        memberSince = nil
     }
 
     func updateDisplayName(_ name: String) async throws {
@@ -114,14 +116,26 @@ final class AccountStore: ObservableObject {
         apply(session)
     }
 
+    /// Firestore's `PATCH` without an update mask replaces the whole
+    /// document, so `createdAt` has to be carried along on every save
+    /// (fetched once, then cached in `memberSince`) or it would get wiped
+    /// out the next time the display name changes.
     private func saveProfile() async throws {
         guard let userID else { return }
         let token = try await validIDToken()
+        let createdAt: Date
+        if let memberSince {
+            createdAt = memberSince
+        } else {
+            let existing = try? await FirestoreService.getDocument(path: "users/\(userID)", idToken: token)
+            createdAt = (existing?.fields["createdAt"] as? Date) ?? Date()
+        }
         try await FirestoreService.setDocument(
             path: "users/\(userID)",
-            fields: ["displayName": displayName, "email": email],
+            fields: ["displayName": displayName, "email": email, "createdAt": createdAt],
             idToken: token
         )
+        memberSince = createdAt
     }
 
     private func loadProfile() async throws {
@@ -130,6 +144,7 @@ final class AccountStore: ObservableObject {
         if let doc = try await FirestoreService.getDocument(path: "users/\(userID)", idToken: token) {
             displayName = doc.fields["displayName"] as? String ?? ""
             email = doc.fields["email"] as? String ?? email
+            memberSince = doc.fields["createdAt"] as? Date
         }
     }
 }

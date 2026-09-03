@@ -5,7 +5,8 @@ struct RatingRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack {
+            HStack(spacing: 8) {
+                InitialsAvatarView(name: rating.userName, size: 26)
                 Text(rating.userName)
                     .font(.subheadline.weight(.semibold))
                 Spacer()

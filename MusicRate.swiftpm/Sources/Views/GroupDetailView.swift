@@ -31,7 +31,8 @@ struct GroupDetailView: View {
             if !members.isEmpty {
                 Section("Members (\(members.count))") {
                     ForEach(members) { member in
-                        HStack {
+                        HStack(spacing: 10) {
+                            InitialsAvatarView(name: member.displayName, size: 32)
                             Text(member.displayName)
                             if member.userID == group.ownerUserID {
                                 Text("Owner")

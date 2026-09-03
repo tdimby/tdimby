@@ -66,21 +66,27 @@ enum AppleMusicSearchService {
 
     /// Seeds the Search tab with Apple's real, publicly-published "most
     /// played" songs chart (updated daily) rather than a canned search.
-    /// That feed only gives track IDs, so this cross-references them
-    /// against the same lookup endpoint search results come from - the
-    /// same `mapItem` handles both, including preview URLs.
+    /// That feed only gives track IDs, so `chartedStarterList` cross-
+    /// references them against the same lookup endpoint search results
+    /// come from - the same `mapItem` handles both, including preview
+    /// URLs. That's two network calls chained together, which used to be
+    /// able to hang for a very long time with no feedback if either host
+    /// stalled - the default `URLSession` only times out after 60s of
+    /// inactivity and has no total cap for almost a week. `get(url:)` now
+    /// uses a session with tight timeouts, and any failure along the way
+    /// falls back to a plain search so this always resolves quickly one
+    /// way or another.
     static func starterList(limit: Int = 25) async throws -> [SpotifyItem] {
+        if let charted = try? await chartedStarterList(limit: limit), !charted.isEmpty {
+            return charted
+        }
+        return try await search(query: "top hits", type: .track, limit: limit)
+    }
+
+    private static func chartedStarterList(limit: Int) async throws -> [SpotifyItem] {
         let chartsURL = URL(string: "https://rss.applemarketingtools.com/api/v2/us/music/most-played/\(limit)/songs.json")!
-        var fetchedCharts: ChartsResponse?
-        do {
-            fetchedCharts = try await get(url: chartsURL)
-        } catch {
-            fetchedCharts = nil
-        }
-        guard let charts = fetchedCharts, !charts.feed.results.isEmpty else {
-            // Charts feed unavailable for some reason - fall back to a plain search.
-            return try await search(query: "top hits", type: .track, limit: limit)
-        }
+        let charts: ChartsResponse = try await get(url: chartsURL)
+        guard !charts.feed.results.isEmpty else { return [] }
 
         let ids = charts.feed.results.map(\.id)
         var lookupComponents = URLComponents(string: "https://itunes.apple.com/lookup")!
@@ -142,11 +148,22 @@ enum AppleMusicSearchService {
         return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
     }
 
+    /// A dedicated session with short timeouts, so a stalled host fails
+    /// fast instead of leaving callers stuck on a spinner - the default
+    /// session's inactivity timeout is 60s, with no total cap for almost a
+    /// week.
+    private static let session: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 8
+        config.timeoutIntervalForResource = 12
+        return URLSession(configuration: config)
+    }()
+
     private static func get<T: Decodable>(url: URL) async throws -> T {
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await URLSession.shared.data(from: url)
+            (data, response) = try await session.data(from: url)
         } catch {
             throw AppleMusicSearchError.transportFailed(error.localizedDescription)
         }

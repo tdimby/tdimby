@@ -40,7 +40,15 @@ group of friends. Real accounts, backed by Firebase.
   a simple per-group leaderboard. A round auto-closes 7 days after it
   starts (checked whenever a member opens the group — see "How weekly
   rounds close" below for why it works that way instead of a real timer).
-- **Profile tab**: your rating history, display name, and account info.
+- **Profile tab**: a real profile page, not just a settings list — an
+  initials avatar (color derived from your name), stat cards for ratings
+  given / groups joined / average rating you hand out, a star-by-star
+  rating breakdown chart, "Member since" (the date your account was
+  created), your recent rating activity, and name editing via a proper
+  Edit Name sheet.
+- **Continue as Test User**: on the sign-in screen, instantly signs into
+  (or creates) a shared test account — useful for trying MusicRate out
+  without typing credentials, not meant for real use.
 
 Privacy is enforced by Firestore's **security rules**
 (`firestore.rules`), not just by the app defaulting to Private in the
