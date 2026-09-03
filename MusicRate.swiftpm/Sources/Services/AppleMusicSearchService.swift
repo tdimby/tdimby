@@ -76,11 +76,18 @@ enum AppleMusicSearchService {
     /// uses a session with tight timeouts, and any failure along the way
     /// falls back to a plain search so this always resolves quickly one
     /// way or another.
-    static func starterList(limit: Int = 25) async throws -> [SpotifyItem] {
-        if let charted = try? await chartedStarterList(limit: limit), !charted.isEmpty {
+    ///
+    /// There's no equivalent public charts feed for albums, so an album
+    /// browse list always comes from the plain-search fallback - this
+    /// used to ignore `type` entirely and hand back a track chart no
+    /// matter what, which made switching the Search tab's picker to
+    /// Albums look broken (it kept showing songs under an "Albums"-shaped
+    /// list).
+    static func starterList(type: SpotifyItemKind, limit: Int = 25) async throws -> [SpotifyItem] {
+        if type == .track, let charted = try? await chartedStarterList(limit: limit), !charted.isEmpty {
             return charted
         }
-        return try await search(query: "top hits", type: .track, limit: limit)
+        return try await search(query: "top hits", type: type, limit: limit)
     }
 
     private static func chartedStarterList(limit: Int) async throws -> [SpotifyItem] {

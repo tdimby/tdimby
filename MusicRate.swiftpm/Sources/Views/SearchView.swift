@@ -5,6 +5,7 @@ struct SearchView: View {
     @State private var searchType: SpotifyItemKind = .track
     @State private var results: [SpotifyItem] = []
     @State private var browseItems: [SpotifyItem] = []
+    @State private var browseItemsType: SpotifyItemKind?
     @State private var browseError: String?
     @State private var isSearching = false
     @State private var errorText: String?
@@ -37,7 +38,7 @@ struct SearchView: View {
                 .task(id: "\(query)|\(searchType.rawValue)") {
                     await debouncedSearch()
                 }
-                .task {
+                .task(id: searchType) {
                     await loadBrowseIfNeeded()
                 }
                 .sheet(isPresented: $showPasteLink) {
@@ -95,7 +96,7 @@ struct SearchView: View {
                         Image(systemName: "wifi.exclamationmark")
                             .font(.system(size: 40))
                             .foregroundStyle(.secondary)
-                        Text("Couldn't load songs")
+                        Text("Couldn't load music")
                             .font(.headline)
                         Text(browseError)
                             .font(.subheadline)
@@ -118,7 +119,7 @@ struct SearchView: View {
                 }
             } else {
                 List {
-                    Section("Popular Right Now") {
+                    Section(searchType == .album ? "Popular Albums" : "Popular Right Now") {
                         ForEach(browseItems) { item in
                             NavigationLink(value: item) {
                                 SongRow(item: item)
@@ -154,8 +155,16 @@ struct SearchView: View {
         }
     }
 
+    /// The browse list ("Popular Right Now"/"Popular Albums") used to be
+    /// fetched once and never again, always as tracks - so switching the
+    /// Songs/Albums picker with an empty search field just kept showing
+    /// the same track list under an album-shaped section, which looked
+    /// broken. It's now keyed to `searchType` and reloads whenever that
+    /// changes.
     private func loadBrowseIfNeeded() async {
-        guard browseItems.isEmpty else { return }
+        guard browseItemsType != searchType else { return }
+        browseItems = []
+        browseItemsType = nil
         await reloadBrowse()
     }
 
@@ -164,7 +173,8 @@ struct SearchView: View {
         browseError = nil
         defer { isSearching = false }
         do {
-            browseItems = try await AppleMusicSearchService.starterList()
+            browseItems = try await AppleMusicSearchService.starterList(type: searchType)
+            browseItemsType = searchType
         } catch {
             browseError = error.localizedDescription
         }
