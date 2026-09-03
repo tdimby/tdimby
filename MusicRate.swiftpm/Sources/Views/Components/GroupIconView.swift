@@ -4,6 +4,27 @@ import SwiftUI
 /// than trying to embed a full emoji keyboard in a Swift Playgrounds app.
 let groupIconOptions = ["🎵", "🎧", "🎤", "🎸", "🥁", "🎹", "🌍", "🔥", "⭐️", "🎬", "🍿", "🎮"]
 
+/// A consistent hue for a group name, so its icon, list card, and detail
+/// header all read as the same identity in different places.
+func groupHue(for name: String) -> Double {
+    Double(abs(name.hashValue) % 360) / 360
+}
+
+/// A bold, full-bleed gradient for a group's card/hero backgrounds -
+/// deliberately more saturated than `GroupIconView`'s own small swatch
+/// since white text sits directly on top of it.
+func groupGradient(for name: String) -> LinearGradient {
+    let hue = groupHue(for: name)
+    return LinearGradient(
+        colors: [
+            Color(hue: hue, saturation: 0.55, brightness: 0.78),
+            Color(hue: (hue + 0.07).truncatingRemainder(dividingBy: 1), saturation: 0.7, brightness: 0.5)
+        ],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+}
+
 /// A rounded-square icon for a group: its chosen emoji on a color derived
 /// from the group's name, so groups stay visually distinct in a list.
 struct GroupIconView: View {
@@ -11,21 +32,9 @@ struct GroupIconView: View {
     let icon: String
     var size: CGFloat = 44
 
-    private var gradient: LinearGradient {
-        let hue = Double(abs(name.hashValue) % 360) / 360
-        return LinearGradient(
-            colors: [
-                Color(hue: hue, saturation: 0.5, brightness: 0.85),
-                Color(hue: hue, saturation: 0.65, brightness: 0.6)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
-
     var body: some View {
         RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
-            .fill(gradient)
+            .fill(groupGradient(for: name))
             .frame(width: size, height: size)
             .overlay(
                 Text(icon)

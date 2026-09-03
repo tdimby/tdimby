@@ -100,6 +100,9 @@ struct GroupDetailView: View {
                 .disabled(isLeaving)
             }
         }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background(LinearGradient(colors: [Color.green.opacity(0.06), .clear], startPoint: .top, endPoint: .bottom))
         .navigationTitle(currentGroup.name)
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(for: SpotifyItem.self) { item in
@@ -144,43 +147,80 @@ struct GroupDetailView: View {
 
     private var header: some View {
         Section {
-            VStack(spacing: 12) {
-                GroupIconView(name: currentGroup.name, icon: currentGroup.icon, size: 72)
-                Text(currentGroup.name)
-                    .font(.title2.weight(.bold))
-                if let description = currentGroup.description, !description.isEmpty {
-                    Text(description)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-                Button {
-                    copyInviteCode()
-                } label: {
-                    HStack(spacing: 8) {
-                        Text(currentGroup.inviteCode)
-                            .font(.system(.body, design: .monospaced).weight(.bold))
-                        Image(systemName: didCopyCode ? "checkmark" : "doc.on.doc")
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(Capsule().fill(.secondary.opacity(0.1)))
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.primary)
+            VStack(spacing: 16) {
+                Text(currentGroup.icon)
+                    .font(.system(size: 40))
+                    .frame(width: 80, height: 80)
+                    .background(Circle().fill(.white.opacity(0.2)))
 
-                ShareLink(item: "Join my MusicRate group \"\(currentGroup.name)\" with invite code \(currentGroup.inviteCode)!") {
-                    Label("Share Invite", systemImage: "square.and.arrow.up")
+                VStack(spacing: 4) {
+                    Text(currentGroup.name)
+                        .font(.title.weight(.bold))
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.center)
+                    if let description = currentGroup.description, !description.isEmpty {
+                        Text(description)
+                            .font(.subheadline)
+                            .foregroundStyle(.white.opacity(0.85))
+                            .multilineTextAlignment(.center)
+                    }
                 }
-                .buttonStyle(.bordered)
-                .tint(.green)
+
+                HStack(spacing: 22) {
+                    heroStat("\(members.count)", "Members")
+                    heroStat("\(feedItems.count)", "Ratings")
+                    heroStat(topRated.first.map { String(format: "%.1f", $0.average) } ?? "–", "Top Song")
+                }
+
+                VStack(spacing: 10) {
+                    Button {
+                        copyInviteCode()
+                    } label: {
+                        HStack(spacing: 8) {
+                            Text(currentGroup.inviteCode)
+                                .font(.system(.body, design: .monospaced).weight(.bold))
+                            Image(systemName: didCopyCode ? "checkmark" : "doc.on.doc")
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(Capsule().fill(.white.opacity(0.2)))
+                    }
+                    .buttonStyle(.plain)
+
+                    ShareLink(item: "Join my MusicRate group \"\(currentGroup.name)\" with invite code \(currentGroup.inviteCode)!") {
+                        Label("Share Invite", systemImage: "square.and.arrow.up")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(Capsule().fill(.white.opacity(0.2)))
+                    }
+                    .buttonStyle(.plain)
+                }
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
+            .padding(.vertical, 28)
+            .padding(.horizontal, 20)
+            .background(groupGradient(for: currentGroup.name))
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .shadow(color: .black.opacity(0.18), radius: 8, y: 4)
         }
         .listRowBackground(Color.clear)
         .listRowInsets(EdgeInsets())
         .listRowSeparator(.hidden)
+    }
+
+    private func heroStat(_ value: String, _ label: String) -> some View {
+        VStack(spacing: 2) {
+            Text(value)
+                .font(.headline.weight(.bold))
+                .foregroundStyle(.white)
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.75))
+        }
+        .frame(minWidth: 56)
     }
 
     private var topRated: [(item: SpotifyItem, average: Double, count: Int)] {

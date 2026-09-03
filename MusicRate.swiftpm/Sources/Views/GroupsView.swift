@@ -9,18 +9,19 @@ struct GroupsView: View {
         NavigationStack {
             Group {
                 if store.myGroups.isEmpty {
-                    ContentUnavailableFallback(
-                        title: "No groups yet",
-                        message: "Create a group and invite friends, or join one with an invite code.",
-                        systemImage: "person.3"
-                    )
+                    emptyState
                 } else {
                     List(store.myGroups) { group in
                         NavigationLink(value: group) {
                             GroupRow(group: group, memberCount: store.groupMemberCounts[group.id])
                         }
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                     }
                     .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .background(backdrop)
                     .refreshable { await store.refreshMyGroups() }
                 }
             }
@@ -50,6 +51,52 @@ struct GroupsView: View {
             .sheet(isPresented: $showJoin) { JoinGroupView() }
         }
     }
+
+    private var backdrop: some View {
+        LinearGradient(colors: [Color.green.opacity(0.07), .clear], startPoint: .top, endPoint: .bottom)
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 16) {
+            Spacer()
+            ZStack {
+                Circle().fill(Color.green.opacity(0.15)).frame(width: 88, height: 88)
+                Image(systemName: "person.3.fill")
+                    .font(.system(size: 34))
+                    .foregroundStyle(.green)
+            }
+            Text("No groups yet")
+                .font(.title3.weight(.bold))
+            Text("Create a group and invite friends, or join one with an invite code.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+            VStack(spacing: 10) {
+                Button {
+                    showCreate = true
+                } label: {
+                    Label("Create a Group", systemImage: "plus.circle.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.green)
+
+                Button {
+                    showJoin = true
+                } label: {
+                    Label("Join with a Code", systemImage: "person.badge.plus")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+            }
+            .padding(.horizontal, 40)
+            .padding(.top, 4)
+            Spacer()
+            Spacer()
+        }
+        .background(backdrop)
+    }
 }
 
 private struct GroupRow: View {
@@ -57,26 +104,45 @@ private struct GroupRow: View {
     let memberCount: Int?
 
     var body: some View {
-        HStack(spacing: 12) {
-            GroupIconView(name: group.name, icon: group.icon, size: 48)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(group.name)
-                    .font(.body.weight(.semibold))
-                if let description = group.description, !description.isEmpty {
-                    Text(description)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center, spacing: 12) {
+                Text(group.icon)
+                    .font(.system(size: 26))
+                    .frame(width: 44, height: 44)
+                    .background(Circle().fill(.white.opacity(0.2)))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(group.name)
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(.white)
                         .lineLimit(1)
+                    if let description = group.description, !description.isEmpty {
+                        Text(description)
+                            .font(.footnote)
+                            .foregroundStyle(.white.opacity(0.85))
+                            .lineLimit(1)
+                    }
                 }
-                HStack(spacing: 12) {
-                    Label("\(memberCount ?? 1)", systemImage: "person.2.fill")
-                    Label(group.inviteCode, systemImage: "number")
-                }
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+                Spacer(minLength: 0)
+            }
+            HStack(spacing: 8) {
+                pill("\(memberCount ?? 1) member\((memberCount ?? 1) == 1 ? "" : "s")", "person.2.fill")
+                pill(group.inviteCode, "number")
             }
         }
-        .padding(.vertical, 4)
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(groupGradient(for: group.name))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .shadow(color: .black.opacity(0.18), radius: 6, y: 3)
+    }
+
+    private func pill(_ text: String, _ systemImage: String) -> some View {
+        Label(text, systemImage: systemImage)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Capsule().fill(.white.opacity(0.2)))
     }
 }
 
