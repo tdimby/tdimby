@@ -268,10 +268,6 @@ with a long history.
 - **One round of weekly picks at a time per group** — there's no history
   view for past rounds beyond the leaderboard's win tally; the songs
   themselves from resolved rounds aren't shown anywhere after the fact.
-- **Submitting to a round is Paste Link only** (not Search) — reuses
-  `SpotifyLinkParser`/`SpotifyMetadataService` directly; adding a search
-  option there would just mean swapping in `AppleMusicSearchService` the
-  same way the Search tab already does.
 - The Firebase API key is stored in source (see "Setup" above for why
   that's fine) but note there's currently no Keychain-backed secure
   storage for the session's refresh token either — it's in UserDefaults,

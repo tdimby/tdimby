@@ -138,41 +138,46 @@ struct SubmitSongView: View {
     @EnvironmentObject var weeklyPickStore: WeeklyPickStore
     @Environment(\.dismiss) private var dismiss
 
+    private enum Mode: String, CaseIterable { case search = "Search", pasteLink = "Paste Link" }
+    @State private var mode: Mode = .search
+
+    // Search mode
+    @State private var query = ""
+    @State private var searchType: SpotifyItemKind = .track
+    @State private var results: [SpotifyItem] = []
+    @State private var isSearching = false
+    @State private var searchError: String?
+
+    // Paste Link mode
     @State private var linkText = ""
-    @State private var item: SpotifyItem?
+    @State private var linkedItem: SpotifyItem?
     @State private var isLookingUp = false
-    @State private var errorText: String?
+    @State private var lookupError: String?
+
+    // Shared submit state
     @State private var isSubmitting = false
+    @State private var submitError: String?
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Spotify Link") {
-                    TextField("Paste a Spotify share link…", text: $linkText)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    Button {
-                        Task { await lookUp() }
-                    } label: {
-                        if isLookingUp {
-                            ProgressView()
-                        } else {
-                            Text("Look Up")
-                        }
-                    }
-                    .disabled(linkText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLookingUp)
+            VStack(spacing: 0) {
+                Picker("Mode", selection: $mode) {
+                    ForEach(Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .padding()
+
+                if let submitError {
+                    Text(submitError).foregroundStyle(.red).font(.footnote).padding(.horizontal)
                 }
 
-                if let item {
-                    Section("Song") {
-                        SongRow(item: item)
-                    }
-                }
-
-                if let errorText {
-                    Section {
-                        Text(errorText).foregroundStyle(.red)
-                    }
+                if isSubmitting {
+                    ProgressView("Submitting…")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if mode == .search {
+                    searchBody
+                } else {
+                    pasteLinkBody
                 }
             }
             .navigationTitle("Submit a Song")
@@ -181,47 +186,124 @@ struct SubmitSongView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
-                ToolbarItem(placement: .confirmationAction) {
+            }
+        }
+    }
+
+    // MARK: - Search mode
+
+    private var searchBody: some View {
+        VStack(spacing: 0) {
+            Picker("Type", selection: $searchType) {
+                Text("Songs").tag(SpotifyItemKind.track)
+                Text("Albums").tag(SpotifyItemKind.album)
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal)
+
+            if isSearching && results.isEmpty {
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let searchError {
+                ContentUnavailableFallback(title: "Search failed", message: searchError, systemImage: "exclamationmark.triangle")
+            } else if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && results.isEmpty {
+                ContentUnavailableFallback(title: "No results", message: "Try Paste Link instead if you can't find it.", systemImage: "magnifyingglass")
+            } else {
+                List(results) { item in
                     Button {
-                        Task { await submit() }
+                        Task { await submit(item) }
                     } label: {
-                        if isSubmitting {
-                            ProgressView()
-                        } else {
-                            Text("Submit")
-                        }
+                        SongRow(item: item)
                     }
-                    .disabled(item == nil || isSubmitting)
+                    .buttonStyle(.plain)
+                }
+                .listStyle(.plain)
+            }
+        }
+        .searchable(text: $query, prompt: "Songs or albums…")
+        .task(id: "\(query)|\(searchType.rawValue)") {
+            await debouncedSearch()
+        }
+    }
+
+    private func debouncedSearch() async {
+        guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            results = []
+            return
+        }
+        try? await Task.sleep(nanoseconds: 400_000_000)
+        guard !Task.isCancelled else { return }
+        isSearching = true
+        searchError = nil
+        defer { isSearching = false }
+        do {
+            results = try await AppleMusicSearchService.search(query: query, type: searchType)
+        } catch {
+            searchError = error.localizedDescription
+            results = []
+        }
+    }
+
+    // MARK: - Paste Link mode
+
+    private var pasteLinkBody: some View {
+        Form {
+            Section("Spotify Link") {
+                TextField("Paste a Spotify share link…", text: $linkText)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                Button {
+                    Task { await lookUp() }
+                } label: {
+                    if isLookingUp {
+                        ProgressView()
+                    } else {
+                        Text("Look Up")
+                    }
+                }
+                .disabled(linkText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLookingUp)
+                if let lookupError {
+                    Text(lookupError).foregroundStyle(.red).font(.footnote)
+                }
+            }
+
+            if let linkedItem {
+                Section("Song") {
+                    SongRow(item: linkedItem)
+                    Button("Submit This Song") {
+                        Task { await submit(linkedItem) }
+                    }
                 }
             }
         }
     }
 
     private func lookUp() async {
-        errorText = nil
-        item = nil
+        lookupError = nil
+        linkedItem = nil
         guard let link = SpotifyLinkParser.firstLink(in: linkText) else {
-            errorText = "That doesn't look like a Spotify link."
+            lookupError = "That doesn't look like a Spotify link."
             return
         }
         isLookingUp = true
         defer { isLookingUp = false }
         do {
-            item = try await SpotifyMetadataService.lookup(link)
+            linkedItem = try await SpotifyMetadataService.lookup(link)
         } catch {
-            errorText = error.localizedDescription
+            lookupError = error.localizedDescription
         }
     }
 
-    private func submit() async {
-        guard let item else { return }
+    // MARK: - Submit
+
+    private func submit(_ item: SpotifyItem) async {
         isSubmitting = true
+        submitError = nil
         defer { isSubmitting = false }
         do {
             try await weeklyPickStore.submitSong(item, to: round)
             dismiss()
         } catch {
-            errorText = error.localizedDescription
+            submitError = error.localizedDescription
         }
     }
 }
