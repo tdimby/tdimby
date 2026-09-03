@@ -30,7 +30,8 @@ let package = Package(
             ],
             capabilities: [
                 .outgoingNetworkConnections()
-            ]
+            ],
+            additionalInfoPlistContentFilePath: "AdditionalInfo.plist"
         )
     ],
     targets: [

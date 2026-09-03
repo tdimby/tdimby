@@ -50,6 +50,20 @@ final class AccountStore: ObservableObject {
         try await loadProfile()
     }
 
+    /// Signs in (or, for a first-time Google user, silently creates an
+    /// account for) via Google OAuth. If there's no existing profile doc
+    /// yet, falls back to the display name/email Google itself provided.
+    func signInWithGoogle() async throws {
+        let session = try await GoogleSignInService.signIn()
+        apply(session)
+        try await loadProfile()
+        if displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            displayName = session.suggestedDisplayName ?? ""
+            email = session.suggestedEmail ?? email
+            try await saveProfile()
+        }
+    }
+
     func signOut() {
         userID = nil
         idToken = nil

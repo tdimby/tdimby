@@ -63,6 +63,17 @@ struct SignInView: View {
                         errorText = nil
                     }
                 }
+
+                if GoogleAuthConfig.isConfigured {
+                    Section {
+                        Button {
+                            Task { await signInWithGoogle() }
+                        } label: {
+                            Label("Sign in with Google", systemImage: "g.circle.fill")
+                        }
+                        .disabled(isSubmitting)
+                    }
+                }
             }
             .navigationTitle(isSigningUp ? "Create Account" : "Sign In")
         }
@@ -85,6 +96,17 @@ struct SignInView: View {
             } else {
                 try await account.signIn(email: email, password: password)
             }
+        } catch {
+            errorText = error.localizedDescription
+        }
+    }
+
+    private func signInWithGoogle() async {
+        isSubmitting = true
+        errorText = nil
+        defer { isSubmitting = false }
+        do {
+            try await account.signInWithGoogle()
         } catch {
             errorText = error.localizedDescription
         }

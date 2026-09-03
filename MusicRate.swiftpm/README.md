@@ -41,6 +41,7 @@ being a member. Details below.
 ```
 MusicRate.swiftpm/
   Package.swift            App metadata (Swift Playgrounds app format)
+  AdditionalInfo.plist     Extra Info.plist content - registers the Google Sign-In URL scheme
   Sources/
     MusicRateApp.swift      App entry point
     Models/
@@ -49,6 +50,8 @@ MusicRate.swiftpm/
     Services/
       FirebaseConfig.swift          Your Firebase project's API key/ID
       FirebaseAuthService.swift     Email/password auth via Firebase's REST API
+      GoogleAuthConfig.swift        Your Google OAuth iOS client ID
+      GoogleSignInService.swift     Hand-rolled Google OAuth (PKCE) + Firebase IdP exchange
       FirestoreService.swift        Firestore's REST API (get/set/query)
       FirestoreValue.swift          Converts to/from Firestore's typed field format
       AccountStore.swift            Signed-in session + profile
@@ -112,6 +115,48 @@ without this — only sign-in/accounts need it).
 The API key isn't a secret (it just says which project a request is for —
 Firestore's **Rules**, not this key, are what actually control access), so
 it's fine for it to live in the app's source like this.
+
+## Setup: Google Sign-In (optional)
+
+Google Sign-In only works if you complete this — without it, the button
+just doesn't appear (`SignInView` hides it when `GoogleAuthConfig` isn't
+configured), and email/password still works fine on its own.
+
+There's no Google/Firebase SDK involved (same reasoning as skipping
+Firebase's SDK for everything else): `GoogleSignInService.swift` hand-rolls
+an OAuth 2.0 Authorization Code + PKCE flow using `ASWebAuthenticationSession`
+(a built-in Apple framework, not a package), then hands the resulting
+Google ID token to Firebase's `accounts:signInWithIdp` REST endpoint to get
+a normal Firebase session — same as email/password, from that point on.
+
+1. Turning on the "Google" provider under Firebase Authentication (which
+   you've already done) auto-creates a **Web client** OAuth credential in
+   the same underlying Google Cloud project — that one has a client secret
+   and isn't what a native app should use. You need a separate one instead:
+2. Go to **console.cloud.google.com**, and make sure you're in the same
+   project as your Firebase project (same name/ID — Firebase projects
+   *are* Google Cloud projects) — check the project switcher at the top.
+3. **APIs & Services → Credentials → + Create Credentials → OAuth client
+   ID**.
+4. Application type: **iOS**.
+5. Bundle ID: `com.example.musicrate` — must match `Package.swift`'s
+   `bundleIdentifier` exactly.
+6. **Create**. You'll get a Client ID that looks like
+   `1234567890-abcdefg.apps.googleusercontent.com`.
+7. Open `Sources/Services/GoogleAuthConfig.swift` and paste that whole
+   Client ID in as `iOSClientID`.
+8. Take that same Client ID and reverse its dot-separated parts — the
+   example above becomes `com.googleusercontent.apps.1234567890-abcdefg` —
+   then open `AdditionalInfo.plist` (at the project root, next to
+   `Package.swift`) and replace the placeholder string inside
+   `CFBundleURLSchemes` with that reversed value. This is Google's login
+   page's way back into the app after you sign in, so it has to be exact —
+   `GoogleAuthConfig.redirectScheme` computes the same value at runtime for
+   building the request, but Info.plist can't reference Swift code, so
+   these two copies have to be kept in sync by hand.
+
+If you'd rather just send me the Client ID, I can compute the reversed
+scheme and fill in both files for you, same as the other credentials.
 
 ## Why Search uses Apple's catalog, not Spotify's
 
@@ -187,6 +232,13 @@ with a long history.
 
 ## Design notes & limitations
 
+- **Google Sign-In is untested.** Of everything in this app, this is the
+  piece I have the least confidence in — a hand-rolled OAuth flow with no
+  way to run it end-to-end from here. If it fails, the two likeliest
+  causes are the redirect scheme not matching exactly between
+  `GoogleAuthConfig.swift` and `AdditionalInfo.plist`, or the Bundle ID on
+  the Google Cloud OAuth client not matching `Package.swift`'s
+  `bundleIdentifier` character-for-character.
 - **No custom Share Extension.** Swift Playgrounds app projects can only
   contain a single app target, so Spotify can't "Share ▸ MusicRate"
   directly. Instead, the app watches the clipboard for a Spotify link.

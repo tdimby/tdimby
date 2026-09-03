@@ -45,6 +45,10 @@ struct FirebaseSession {
     let idToken: String
     let refreshToken: String
     let expiresAt: Date
+    /// Only set right after a fresh Google sign-in, from Google's own
+    /// profile data - used to pre-fill a brand-new account's profile.
+    var suggestedDisplayName: String?
+    var suggestedEmail: String?
 }
 
 /// Firebase Authentication's REST API (Identity Toolkit) for email/password

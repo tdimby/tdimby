@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <!--
+                Replace this with your Google iOS OAuth client's reversed
+                Client ID (see the "Set up Google Sign-In" section of the
+                README) - e.g. a Client ID of
+                "1234-abcd.apps.googleusercontent.com" becomes
+                "com.googleusercontent.apps.1234-abcd" here.
+                Must exactly match GoogleAuthConfig.redirectScheme.
+                -->
+                <string>com.googleusercontent.apps.REPLACE-WITH-YOUR-CLIENT-ID</string>
+            </array>
+        </dict>
+    </array>
+</dict>
+</plist>
