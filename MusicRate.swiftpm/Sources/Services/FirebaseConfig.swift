@@ -6,8 +6,8 @@ import Foundation
 /// can read/write what. Get both from Firebase Console → Project Settings
 /// → General → "Your apps" → the web app's config snippet.
 enum FirebaseConfig {
-    static let apiKey = ""
-    static let projectID = ""
+    static let apiKey = "AIzaSyCegFUq5Y_CBcmHj-00tylJazHTe2fI5ho"
+    static let projectID = "musicrate-e66a4"
 
     static var isConfigured: Bool {
         !apiKey.isEmpty && !projectID.isEmpty
