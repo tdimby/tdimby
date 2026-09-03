@@ -13,9 +13,31 @@ struct SignInView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    VStack(spacing: 10) {
+                        ZStack {
+                            Circle()
+                                .fill(.green.gradient)
+                                .frame(width: 72, height: 72)
+                            Image(systemName: "music.note")
+                                .font(.system(size: 32, weight: .semibold))
+                                .foregroundStyle(.white)
+                        }
+                        Text("MusicRate")
+                            .font(.title2.weight(.bold))
+                        Text(isSigningUp ? "Create an account to start rating" : "Sign in to rate and share music")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                }
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
+
                 if !FirebaseConfig.isConfigured {
                     Section {
-                        Text("MusicRate isn't connected to a Firebase project yet. Add your API key and project ID in FirebaseConfig.swift.")
+                        Label("MusicRate isn't connected to a Firebase project yet. Add your API key and project ID in FirebaseConfig.swift.", systemImage: "exclamationmark.triangle.fill")
                             .foregroundStyle(.red)
                     }
                 }
@@ -40,7 +62,9 @@ struct SignInView: View {
 
                 if let errorText {
                     Section {
-                        Text(errorText).foregroundStyle(.red)
+                        Label(errorText, systemImage: "exclamationmark.circle.fill")
+                            .foregroundStyle(.red)
+                            .font(.subheadline)
                     }
                 }
 
@@ -48,34 +72,67 @@ struct SignInView: View {
                     Button {
                         Task { await submit() }
                     } label: {
-                        if isSubmitting {
-                            ProgressView()
-                        } else {
-                            Text(isSigningUp ? "Create Account" : "Sign In")
+                        HStack {
+                            Spacer()
+                            if isSubmitting {
+                                ProgressView().tint(.white)
+                            } else {
+                                Text(isSigningUp ? "Create Account" : "Sign In").bold()
+                            }
+                            Spacer()
                         }
                     }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.green)
                     .disabled(!canSubmit || isSubmitting)
-                }
+                    .listRowInsets(EdgeInsets())
+                    .padding(12)
 
-                Section {
                     Button(isSigningUp ? "Already have an account? Sign In" : "New here? Create an Account") {
-                        isSigningUp.toggle()
+                        withAnimation { isSigningUp.toggle() }
                         errorText = nil
                     }
+                    .font(.subheadline)
+                    .frame(maxWidth: .infinity)
+                    .listRowInsets(EdgeInsets())
+                    .padding(.bottom, 8)
                 }
+                .listRowBackground(Color.clear)
 
                 if GoogleAuthConfig.isConfigured {
                     Section {
                         Button {
                             Task { await signInWithGoogle() }
                         } label: {
-                            Label("Sign in with Google", systemImage: "g.circle.fill")
+                            HStack {
+                                Spacer()
+                                Label("Sign in with Google", systemImage: "g.circle.fill")
+                                Spacer()
+                            }
                         }
+                        .buttonStyle(.bordered)
                         .disabled(isSubmitting)
                     }
                 }
+
+                Section {
+                    Button {
+                        Task { await signInAsTestUser() }
+                    } label: {
+                        HStack {
+                            Spacer()
+                            Label("Continue as Test User", systemImage: "hammer.fill")
+                                .foregroundStyle(.orange)
+                            Spacer()
+                        }
+                    }
+                    .disabled(isSubmitting)
+                } footer: {
+                    Text("Instantly signs into (or creates) a shared test account — no typing needed. For trying the app out, not for real use.")
+                }
             }
-            .navigationTitle(isSigningUp ? "Create Account" : "Sign In")
+            .navigationBarTitleDisplayMode(.inline)
+            .animation(.default, value: isSigningUp)
         }
     }
 
@@ -107,6 +164,17 @@ struct SignInView: View {
         defer { isSubmitting = false }
         do {
             try await account.signInWithGoogle()
+        } catch {
+            errorText = error.localizedDescription
+        }
+    }
+
+    private func signInAsTestUser() async {
+        isSubmitting = true
+        errorText = nil
+        defer { isSubmitting = false }
+        do {
+            try await account.signInAsTestUser()
         } catch {
             errorText = error.localizedDescription
         }

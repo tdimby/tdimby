@@ -2,7 +2,7 @@ import SwiftUI
 
 struct ArtworkView: View {
     let url: URL?
-    var size: CGFloat = 52
+    var size: CGFloat = 56
 
     var body: some View {
         AsyncImage(url: url) { phase in
@@ -10,13 +10,14 @@ struct ArtworkView: View {
             case .success(let image):
                 image.resizable().aspectRatio(contentMode: .fill)
             default:
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(.secondary.opacity(0.15))
                     .overlay(Image(systemName: "music.note").foregroundStyle(.secondary))
             }
         }
         .frame(width: size, height: size)
-        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .shadow(color: .black.opacity(0.15), radius: 3, y: 2)
     }
 }
 
@@ -37,14 +38,18 @@ struct SongRow: View {
     var body: some View {
         HStack(spacing: 12) {
             ArtworkView(url: item.artworkURL)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(item.title)
-                    .font(.body.weight(.semibold))
+                    .font(.callout.weight(.semibold))
                     .lineLimit(1)
-                Text(item.subtitle)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    Image(systemName: item.kind.systemImage)
+                        .font(.caption2)
+                    Text(item.subtitle)
+                        .lineLimit(1)
+                }
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
             }
             Spacer(minLength: 8)
             if item.previewURL != nil {
@@ -52,6 +57,7 @@ struct SongRow: View {
             }
             trailing
         }
+        .padding(.vertical, 3)
     }
 }
 
@@ -70,6 +76,7 @@ struct PreviewButton: View {
             Image(systemName: player.isPlaying(item) ? "pause.circle.fill" : "play.circle.fill")
                 .font(.system(size: 26))
                 .foregroundStyle(.tint)
+                .symbolRenderingMode(.hierarchical)
         }
         .buttonStyle(.plain)
     }

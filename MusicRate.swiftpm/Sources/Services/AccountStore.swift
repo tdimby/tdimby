@@ -64,6 +64,19 @@ final class AccountStore: ObservableObject {
         }
     }
 
+    /// Signs into a fixed test account, creating it on first use. A
+    /// convenience for trying the app out without typing credentials each
+    /// time — not something a shipped app should offer to real users.
+    func signInAsTestUser() async throws {
+        let testEmail = "test@musicrate.app"
+        let testPassword = "testpass123"
+        do {
+            try await signIn(email: testEmail, password: testPassword)
+        } catch {
+            try await signUp(email: testEmail, password: testPassword, displayName: "Test User")
+        }
+    }
+
     func signOut() {
         userID = nil
         idToken = nil

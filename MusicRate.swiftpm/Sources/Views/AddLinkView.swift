@@ -28,31 +28,32 @@ struct AddLinkView: View {
                         Button {
                             linkText = clipboardSuggestion
                             self.clipboardSuggestion = nil
-                            Task { await lookUp() }
                         } label: {
                             Label("Use Spotify link from clipboard", systemImage: "doc.on.clipboard")
                         }
                     }
                 }
 
-                Section("Spotify Link") {
-                    TextField("Paste a Spotify share link…", text: $linkText)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .keyboardType(.URL)
-                    Button {
-                        Task { await lookUp() }
-                    } label: {
+                Section {
+                    HStack {
+                        TextField("Paste a Spotify share link…", text: $linkText)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .keyboardType(.URL)
                         if isLookingUp {
                             ProgressView()
-                        } else {
-                            Text("Look Up")
+                        } else if item != nil {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
                         }
                     }
-                    .disabled(linkText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLookingUp)
                     if let lookupError {
                         Text(lookupError).foregroundStyle(.red).font(.footnote)
                     }
+                } header: {
+                    Text("Spotify Link")
+                } footer: {
+                    Text("Looked up automatically as soon as you paste a full link.")
                 }
 
                 if let item {
@@ -60,9 +61,11 @@ struct AddLinkView: View {
                         SongRow(item: item)
                     }
 
-                    Section("Your Rating") {
+                    Section {
                         StarRatingView(rating: $stars)
                         TextField("Add a note (optional)", text: $note, axis: .vertical)
+                    } header: {
+                        Text("Your Rating")
                     }
 
                     Section {
@@ -83,13 +86,21 @@ struct AddLinkView: View {
                         Button {
                             Task { await submit() }
                         } label: {
-                            if isSubmitting {
-                                ProgressView()
-                            } else {
-                                Text("Submit Rating")
+                            HStack {
+                                Spacer()
+                                if isSubmitting {
+                                    ProgressView().tint(.white)
+                                } else {
+                                    Text("Submit Rating").bold()
+                                }
+                                Spacer()
                             }
                         }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.green)
                         .disabled(stars == 0 || isSubmitting)
+                        .listRowInsets(EdgeInsets())
+                        .padding(12)
                         if let submitError {
                             Text(submitError).foregroundStyle(.red).font(.footnote)
                         }
@@ -98,10 +109,15 @@ struct AddLinkView: View {
                                 .foregroundStyle(.green)
                         }
                     }
+                    .listRowBackground(Color.clear)
                 }
             }
             .navigationTitle("Add & Rate")
+            .animation(.default, value: item)
             .onAppear { checkClipboard() }
+            .task(id: linkText) {
+                await autoLookUp()
+            }
         }
     }
 
@@ -112,14 +128,24 @@ struct AddLinkView: View {
         #endif
     }
 
-    private func lookUp() async {
-        lookupError = nil
-        item = nil
+    private func autoLookUp() async {
         didSubmit = false
-        guard let link = SpotifyLinkParser.firstLink(in: linkText) else {
-            lookupError = "That doesn't look like a Spotify link."
+        let trimmed = linkText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            item = nil
+            lookupError = nil
             return
         }
+        guard let link = SpotifyLinkParser.firstLink(in: linkText) else {
+            // Don't flash an error while the user is still typing/pasting -
+            // only clear any existing result.
+            item = nil
+            return
+        }
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        guard !Task.isCancelled else { return }
+
+        lookupError = nil
         isLookingUp = true
         defer { isLookingUp = false }
         do {

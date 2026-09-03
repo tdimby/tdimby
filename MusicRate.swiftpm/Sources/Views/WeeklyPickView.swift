@@ -247,23 +247,25 @@ struct SubmitSongView: View {
 
     private var pasteLinkBody: some View {
         Form {
-            Section("Spotify Link") {
-                TextField("Paste a Spotify share link…", text: $linkText)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                Button {
-                    Task { await lookUp() }
-                } label: {
+            Section {
+                HStack {
+                    TextField("Paste a Spotify share link…", text: $linkText)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
                     if isLookingUp {
                         ProgressView()
-                    } else {
-                        Text("Look Up")
+                    } else if linkedItem != nil {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
                     }
                 }
-                .disabled(linkText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLookingUp)
                 if let lookupError {
                     Text(lookupError).foregroundStyle(.red).font(.footnote)
                 }
+            } header: {
+                Text("Spotify Link")
+            } footer: {
+                Text("Looked up automatically as soon as you paste a full link.")
             }
 
             if let linkedItem {
@@ -275,15 +277,26 @@ struct SubmitSongView: View {
                 }
             }
         }
+        .task(id: linkText) {
+            await autoLookUp()
+        }
     }
 
-    private func lookUp() async {
-        lookupError = nil
-        linkedItem = nil
-        guard let link = SpotifyLinkParser.firstLink(in: linkText) else {
-            lookupError = "That doesn't look like a Spotify link."
+    private func autoLookUp() async {
+        let trimmed = linkText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            linkedItem = nil
+            lookupError = nil
             return
         }
+        guard let link = SpotifyLinkParser.firstLink(in: linkText) else {
+            linkedItem = nil
+            return
+        }
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        guard !Task.isCancelled else { return }
+
+        lookupError = nil
         isLookingUp = true
         defer { isLookingUp = false }
         do {
