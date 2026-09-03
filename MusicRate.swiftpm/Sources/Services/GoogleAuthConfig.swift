@@ -9,7 +9,7 @@ import Foundation
 /// secret, which a native app has no safe place to hold; this one doesn't
 /// need a secret at all.
 enum GoogleAuthConfig {
-    static let iOSClientID = ""
+    static let iOSClientID = "1043901443171-3b1i108l8gbng1a0ohhota5i91ogo06k.apps.googleusercontent.com"
 
     /// Google's "reversed client ID" convention, e.g. a client ID of
     /// "1234-abcd.apps.googleusercontent.com" becomes

@@ -7,15 +7,7 @@
         <dict>
             <key>CFBundleURLSchemes</key>
             <array>
-                <!--
-                Replace this with your Google iOS OAuth client's reversed
-                Client ID (see the "Set up Google Sign-In" section of the
-                README) - e.g. a Client ID of
-                "1234-abcd.apps.googleusercontent.com" becomes
-                "com.googleusercontent.apps.1234-abcd" here.
-                Must exactly match GoogleAuthConfig.redirectScheme.
-                -->
-                <string>com.googleusercontent.apps.REPLACE-WITH-YOUR-CLIENT-ID</string>
+                <string>com.googleusercontent.apps.1043901443171-3b1i108l8gbng1a0ohhota5i91ogo06k</string>
             </array>
         </dict>
     </array>
