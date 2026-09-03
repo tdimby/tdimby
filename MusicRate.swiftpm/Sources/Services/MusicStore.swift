@@ -4,6 +4,7 @@ enum MusicStoreError: LocalizedError {
     case notSignedIn
     case invalidGroupName
     case invalidInviteCode
+    case notGroupOwner
 
     var errorDescription: String? {
         switch self {
@@ -13,6 +14,8 @@ enum MusicStoreError: LocalizedError {
             return "Give your group a name."
         case .invalidInviteCode:
             return "That invite code doesn't match any group."
+        case .notGroupOwner:
+            return "Only the group's owner can do that."
         }
     }
 }
@@ -28,6 +31,7 @@ final class MusicStore: ObservableObject {
     private var songCache: [String: SpotifyItem] = [:]
 
     @Published var myGroups: [RatingGroup] = []
+    @Published var groupMemberCounts: [String: Int] = [:]
     @Published var worldwideFeed: [FeedItem] = []
     @Published var myRatings: [Rating] = []
     @Published var lastError: String?
@@ -181,23 +185,32 @@ final class MusicStore: ObservableObject {
             )
             let groupIDs = memberships.compactMap { $0.fields["groupID"] as? String }
             var groups: [RatingGroup] = []
+            var counts: [String: Int] = [:]
             for groupID in groupIDs {
                 if let doc = try? await FirestoreService.getDocument(path: "groups/\(groupID)", idToken: token),
                    let group = group(from: doc) {
                     groups.append(group)
+                    let memberDocs = (try? await FirestoreService.query(
+                        collectionPath: "memberships",
+                        equals: ["groupID": groupID],
+                        idToken: token
+                    )) ?? []
+                    counts[groupID] = memberDocs.count
                 }
             }
             myGroups = groups.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+            groupMemberCounts = counts
         } catch {
             lastError = error.localizedDescription
         }
     }
 
-    func createGroup(name: String) async throws -> RatingGroup {
+    func createGroup(name: String, icon: String = "🎵", description: String? = nil) async throws -> RatingGroup {
         guard let userID = currentUserID else { throw MusicStoreError.notSignedIn }
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw MusicStoreError.invalidGroupName }
         let token = try await account.validIDToken()
+        let trimmedDescription = description?.trimmingCharacters(in: .whitespacesAndNewlines)
 
         let groupID = UUID().uuidString
         let doc = try await FirestoreService.setDocument(
@@ -206,7 +219,9 @@ final class MusicStore: ObservableObject {
                 "name": trimmed,
                 "inviteCode": Self.randomInviteCode(),
                 "ownerUserID": userID,
-                "createdAt": Date()
+                "createdAt": Date(),
+                "icon": icon,
+                "description": (trimmedDescription?.isEmpty ?? true) ? nil : trimmedDescription
             ],
             idToken: token
         )
@@ -215,6 +230,65 @@ final class MusicStore: ObservableObject {
         try await join(group: group, userID: userID, token: token)
         await refreshMyGroups()
         return group
+    }
+
+    /// `PATCH` without an update mask replaces the whole document, so
+    /// every field - not just the ones being changed - has to be carried
+    /// along on every group write (see `AccountStore.saveProfile` for the
+    /// same issue with user profiles).
+    @discardableResult
+    func updateGroup(_ group: RatingGroup, name: String, icon: String, description: String?) async throws -> RatingGroup {
+        guard let userID = currentUserID else { throw MusicStoreError.notSignedIn }
+        guard userID == group.ownerUserID else { throw MusicStoreError.notGroupOwner }
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { throw MusicStoreError.invalidGroupName }
+        let trimmedDescription = description?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let token = try await account.validIDToken()
+
+        let doc = try await FirestoreService.setDocument(
+            path: "groups/\(group.id)",
+            fields: [
+                "name": trimmedName,
+                "inviteCode": group.inviteCode,
+                "ownerUserID": group.ownerUserID,
+                "createdAt": group.createdAt,
+                "icon": icon,
+                "description": (trimmedDescription?.isEmpty ?? true) ? nil : trimmedDescription
+            ],
+            idToken: token
+        )
+        guard let updated = self.group(from: doc) else { throw FirestoreError.decodingFailed }
+        if let index = myGroups.firstIndex(where: { $0.id == updated.id }) {
+            myGroups[index] = updated
+        }
+        return updated
+    }
+
+    /// Invalidates the old invite code immediately - anyone who hasn't
+    /// already joined with it will need the new one.
+    @discardableResult
+    func regenerateInviteCode(for group: RatingGroup) async throws -> RatingGroup {
+        guard let userID = currentUserID else { throw MusicStoreError.notSignedIn }
+        guard userID == group.ownerUserID else { throw MusicStoreError.notGroupOwner }
+        let token = try await account.validIDToken()
+
+        let doc = try await FirestoreService.setDocument(
+            path: "groups/\(group.id)",
+            fields: [
+                "name": group.name,
+                "inviteCode": Self.randomInviteCode(),
+                "ownerUserID": group.ownerUserID,
+                "createdAt": group.createdAt,
+                "icon": group.icon,
+                "description": group.description
+            ],
+            idToken: token
+        )
+        guard let updated = self.group(from: doc) else { throw FirestoreError.decodingFailed }
+        if let index = myGroups.firstIndex(where: { $0.id == updated.id }) {
+            myGroups[index] = updated
+        }
+        return updated
     }
 
     func joinGroup(inviteCode: String) async throws -> RatingGroup {
@@ -335,7 +409,15 @@ final class MusicStore: ObservableObject {
             let ownerUserID = fields["ownerUserID"] as? String,
             let createdAt = fields["createdAt"] as? Date
         else { return nil }
-        return RatingGroup(id: doc.id, name: name, inviteCode: inviteCode, ownerUserID: ownerUserID, createdAt: createdAt)
+        return RatingGroup(
+            id: doc.id,
+            name: name,
+            inviteCode: inviteCode,
+            ownerUserID: ownerUserID,
+            createdAt: createdAt,
+            icon: fields["icon"] as? String ?? "🎵",
+            description: fields["description"] as? String
+        )
     }
 
     private static func randomInviteCode(length: Int = 6) -> String {

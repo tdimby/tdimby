@@ -29,11 +29,18 @@ group of friends. Real accounts, backed by Firebase.
 - **Private by default.** A new rating is visible only to you unless you
   explicitly pick **Worldwide** or a specific group from the "Rate For"
   picker — Worldwide isn't the default anymore, it's an opt-in choice.
-- **Groups**: create a group and share its 6-character invite code, or join
-  one with a code someone shares with you — real, cross-device groups.
-  Each group shows its full **member roster** and has a **Leave Group**
-  option, and a **Top Rated** section surfacing its highest-rated songs
-  (from recent activity — see "Design notes" below).
+- **Groups**: create a group — pick an emoji icon and an optional
+  description — and share its 6-character invite code, or join one with a
+  code someone shares with you — real, cross-device groups. Each group
+  shows its full **member roster**, a member count and its icon right in
+  the Groups list, and has a **Leave Group** option and a **Top Rated**
+  section surfacing its highest-rated songs (from recent activity — see
+  "Design notes" below).
+- **Group Settings (owner only)**: rename the group, change its icon or
+  description, or tap **Generate New Code** to immediately invalidate the
+  current invite code and issue a new one — useful if a code leaked
+  somewhere it shouldn't have. Reachable via the gear icon on a group you
+  own.
 - **Song of the Week**: inside a group, start a round, everyone submits a
   song, everyone *except the submitter* rates it 1–5 stars, and whoever's
   submission has the best average when the round closes wins — tracked on

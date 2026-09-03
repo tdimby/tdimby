@@ -6,6 +6,8 @@ struct RatingGroup: Identifiable, Codable, Hashable {
     var inviteCode: String
     let ownerUserID: String
     let createdAt: Date
+    var icon: String = "🎵"
+    var description: String?
 }
 
 struct GroupMember: Identifiable, Hashable {

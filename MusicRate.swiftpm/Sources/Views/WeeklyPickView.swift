@@ -48,8 +48,12 @@ struct WeeklyPickSection: View {
 
             if !weeklyPickStore.leaderboard.isEmpty {
                 DisclosureGroup("Leaderboard") {
-                    ForEach(weeklyPickStore.leaderboard) { entry in
-                        HStack {
+                    ForEach(Array(weeklyPickStore.leaderboard.enumerated()), id: \.element.id) { index, entry in
+                        HStack(spacing: 10) {
+                            Text(medal(for: index))
+                                .font(.subheadline)
+                                .frame(width: 24)
+                            InitialsAvatarView(name: entry.name, size: 26)
                             Text(entry.name)
                             Spacer()
                             Text("\(entry.wins) win\(entry.wins == 1 ? "" : "s")")
@@ -64,6 +68,15 @@ struct WeeklyPickSection: View {
             if let round = weeklyPickStore.currentRound {
                 SubmitSongView(round: round)
             }
+        }
+    }
+
+    private func medal(for index: Int) -> String {
+        switch index {
+        case 0: return "🥇"
+        case 1: return "🥈"
+        case 2: return "🥉"
+        default: return "\(index + 1)."
         }
     }
 }
