@@ -6,22 +6,34 @@ group of friends. Real accounts, backed by Firebase.
 
 ## Features
 
-- **Real accounts.** Sign up with email/password; your ratings and groups
-  follow you across devices.
-- **Search for songs and albums** right in the app — no link needed. Uses
-  Apple's free iTunes Search API (see "Why Search uses Apple's catalog,
-  not Spotify's" below for why it isn't Spotify's own search).
-- **Paste a Spotify link** (track, album, or playlist) and MusicRate looks
-  up its title, artist/owner, and artwork via Spotify's public oEmbed
-  endpoint — no API key needed for this part.
+- **Real accounts.** Sign up with email/password or Google; your ratings
+  and groups follow you across devices.
+- **Search is the primary way to find music** — songs and albums, right in
+  the app, no link needed. Opens on Apple's real, daily-updated "most
+  played" chart. Uses Apple's free iTunes Search API (see "Why Search uses
+  Apple's catalog, not Spotify's" below for why it isn't Spotify's own
+  search).
+- **30-second previews.** Anything Search finds has a play button right on
+  its row — tap to preview, tap again (or tap another song) to stop.
+  (Apple Music results only; Spotify's oEmbed lookup doesn't provide a
+  preview clip, so pasted links don't have one.)
+- **Paste a Spotify link instead**, if Search can't find what you're
+  after — available from the Search tab's toolbar and its "no results"
+  state, not a separate main tab anymore. Still works exactly as before:
+  MusicRate looks up the title/artist/artwork via Spotify's public oEmbed
+  endpoint, no API key needed.
 - **Clipboard detection**: switch to MusicRate right after "Copy Link" in
-  Spotify's share sheet, and the app offers to use that link immediately.
+  Spotify's share sheet, and the paste-link screen offers to use that link
+  immediately.
 - **Rate 1–5 stars** with an optional note.
 - **Private by default.** A new rating is visible only to you unless you
   explicitly pick **Worldwide** or a specific group from the "Rate For"
   picker — Worldwide isn't the default anymore, it's an opt-in choice.
 - **Groups**: create a group and share its 6-character invite code, or join
   one with a code someone shares with you — real, cross-device groups.
+  Each group shows its full **member roster** and has a **Leave Group**
+  option, and a **Top Rated** section surfacing its highest-rated songs
+  (from recent activity — see "Design notes" below).
 - **Song of the Week**: inside a group, start a round, everyone submits a
   song, everyone *except the submitter* rates it 1–5 stars, and whoever's
   submission has the best average when the round closes wins — tracked on
@@ -57,10 +69,14 @@ MusicRate.swiftpm/
       AccountStore.swift            Signed-in session + profile
       MusicStore.swift              Ratings/groups/songs, Firestore-backed
       WeeklyPickStore.swift         Weekly round submissions/ratings/leaderboard
+      PreviewPlayer.swift           Shared AVPlayer for 30-second preview clips
       SpotifyLinkParser.swift       Extracts track/album/... IDs from links
       SpotifyMetadataService.swift  Looks up title/artist/art via oEmbed
-      AppleMusicSearchService.swift Search + starter list via iTunes Search
-    Views/                  SwiftUI screens (Sign In, Feed, Search, Paste Link, Groups, Profile)
+      AppleMusicSearchService.swift Search, charts-based starter list, previews via iTunes
+    Views/
+      Tabs: Feed (Worldwide), Search, Groups, Profile - SignInView shown
+      instead of the tabs when signed out. AddLinkView (Paste Link) is a
+      sheet presented from Search, not a tab of its own.
   firestore.rules          Security rules - the real enforcement of privacy/groups
 ```
 
@@ -69,6 +85,13 @@ MusicRate.swiftpm/
 Accounts, groups, and ratings all live in Firebase now, so the app needs a
 Firebase project before any of that works (Search and Paste Link work
 without this — only sign-in/accounts need it).
+
+> **Already did this setup before?** `firestore.rules` changed again in
+> this update (the `memberships` collection now allows reading a group's
+> full roster, and leaving a group) — re-copy the file into Firestore's
+> Rules tab and **Publish** again, or nothing new here will work. No new
+> indexes this time, and your existing `apiKey`/`projectID` in
+> `FirebaseConfig.swift` don't need to change.
 
 1. Go to **console.firebase.google.com** → **Add project** → name it
    anything (Google Analytics isn't needed, skip it) → Create.
@@ -256,6 +279,20 @@ with a long history.
 - Track/album/playlist metadata from Paste Link comes from Spotify's
   oEmbed endpoint, which only exposes what's needed for an embed preview
   (title, thumbnail) — not full details like duration or genre.
+- **A group's "Top Rated" is based on recent activity, not all-time.** It's
+  computed client-side from the same 50 most recent ratings the "Recently
+  Rated" list already fetches (`GroupDetailView.feed`), not a separate
+  query over the group's entire history — cheap (no extra reads), but a
+  song rated highly a long time ago can fall out of the top list once 50
+  newer ratings replace it in that window, even if nothing has "beaten" it.
+- **No owner transfer.** A group's owner can leave like anyone else (Leave
+  Group doesn't check for this), which leaves the group without anyone who
+  can rename it (`groups`' `update` rule requires `ownerUserID`) — not
+  fatal, ratings/weekly picks are unaffected, just a rough edge.
+- **Preview playback is best-effort**, not a full mini-player — no lock
+  screen/Control Center integration, no background playback, and no
+  explicit `AVAudioSession` configuration, since it's just a 30-second
+  clip meant to play in the foreground while browsing (`PreviewPlayer.swift`).
 
 This was written without access to a Mac/Xcode or a real Firebase project
 to test against, so it hasn't been compiled or run — read it over and fix

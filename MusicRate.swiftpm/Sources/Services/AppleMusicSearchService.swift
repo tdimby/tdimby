@@ -17,12 +17,11 @@ enum AppleMusicSearchError: LocalizedError {
     }
 }
 
-/// Searches Apple's free, keyless iTunes Search API. Unlike Spotify's Web
-/// API, this needs no registered app, no API key, and no login — it's a
-/// plain public HTTP endpoint. The tradeoff: results and "Open in ___"
-/// links point to Apple Music, not Spotify (see `MusicSource`), and there's
-/// no real "browse/charts" endpoint without auth, so the starter list here
-/// is just a broad search rather than actual curated new releases.
+/// Searches Apple's free, keyless iTunes Search API, and seeds the Search
+/// tab's starter list from Apple's public "most played" charts feed. Both
+/// need no registered app, no API key, and no login. The tradeoff: results
+/// and "Open in ___" links point to Apple Music, not Spotify (see
+/// `MusicSource`).
 enum AppleMusicSearchService {
     private struct SearchResponse: Decodable {
         let results: [ResultItem]
@@ -37,6 +36,15 @@ enum AppleMusicSearchService {
         let artworkUrl100: String?
         let trackViewUrl: String?
         let collectionViewUrl: String?
+        let previewUrl: String?
+    }
+
+    private struct ChartsResponse: Decodable {
+        struct Feed: Decodable {
+            struct Result: Decodable { let id: String }
+            let results: [Result]
+        }
+        let feed: Feed
     }
 
     static func search(query: String, type: SpotifyItemKind, limit: Int = 25) async throws -> [SpotifyItem] {
@@ -56,10 +64,39 @@ enum AppleMusicSearchService {
         return response.results.compactMap { mapItem($0, type: type) }
     }
 
-    /// iTunes Search has no keyless "new releases" endpoint, so this just
-    /// runs a broad search to seed the Search tab with something to browse.
+    /// Seeds the Search tab with Apple's real, publicly-published "most
+    /// played" songs chart (updated daily) rather than a canned search.
+    /// That feed only gives track IDs, so this cross-references them
+    /// against the same lookup endpoint search results come from - the
+    /// same `mapItem` handles both, including preview URLs.
     static func starterList(limit: Int = 25) async throws -> [SpotifyItem] {
-        try await search(query: "top hits 2025", type: .track, limit: limit)
+        let chartsURL = URL(string: "https://rss.applemarketingtools.com/api/v2/us/music/most-played/\(limit)/songs.json")!
+        var fetchedCharts: ChartsResponse?
+        do {
+            fetchedCharts = try await get(url: chartsURL)
+        } catch {
+            fetchedCharts = nil
+        }
+        guard let charts = fetchedCharts, !charts.feed.results.isEmpty else {
+            // Charts feed unavailable for some reason - fall back to a plain search.
+            return try await search(query: "top hits", type: .track, limit: limit)
+        }
+
+        let ids = charts.feed.results.map(\.id)
+        var lookupComponents = URLComponents(string: "https://itunes.apple.com/lookup")!
+        lookupComponents.percentEncodedQueryItems = [URLQueryItem(name: "id", value: ids.joined(separator: ","))]
+        guard let lookupURL = lookupComponents.url else { return [] }
+
+        let looked: SearchResponse = try await get(url: lookupURL)
+        // Order matches the original chart ranking, not lookup response order.
+        let byID = Dictionary(
+            looked.results.compactMap { item -> (String, ResultItem)? in
+                guard let id = item.trackId else { return nil }
+                return (String(id), item)
+            },
+            uniquingKeysWith: { first, _ in first }
+        )
+        return ids.compactMap { byID[$0] }.compactMap { mapItem($0, type: .track) }
     }
 
     private static func mapItem(_ item: ResultItem, type: SpotifyItemKind) -> SpotifyItem? {
@@ -75,7 +112,8 @@ enum AppleMusicSearchService {
                 subtitle: item.artistName ?? "Album",
                 artworkURL: item.artworkUrl100.flatMap { URL(string: higherResolution($0)) },
                 spotifyURL: viewURL,
-                source: .appleMusic
+                source: .appleMusic,
+                previewURL: nil
             )
         default:
             guard let id = item.trackId, let name = item.trackName,
@@ -88,7 +126,8 @@ enum AppleMusicSearchService {
                 subtitle: item.artistName ?? "Track",
                 artworkURL: item.artworkUrl100.flatMap { URL(string: higherResolution($0)) },
                 spotifyURL: viewURL,
-                source: .appleMusic
+                source: .appleMusic,
+                previewURL: item.previewUrl.flatMap(URL.init(string:))
             )
         }
     }

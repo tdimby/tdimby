@@ -40,9 +40,6 @@ struct MainTabView: View {
             SearchView()
                 .tabItem { Label("Search", systemImage: "magnifyingglass") }
 
-            AddLinkView()
-                .tabItem { Label("Paste Link", systemImage: "link") }
-
             GroupsView()
                 .tabItem { Label("Groups", systemImage: "person.3.fill") }
 

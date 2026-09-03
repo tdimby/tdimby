@@ -4,10 +4,15 @@ struct GroupDetailView: View {
     let group: RatingGroup
 
     @EnvironmentObject var store: MusicStore
+    @EnvironmentObject var account: AccountStore
+    @Environment(\.dismiss) private var dismiss
+
     @State private var feedItems: [FeedItem] = []
+    @State private var members: [GroupMember] = []
     @State private var isLoading = true
     @State private var errorText: String?
-    @State private var showShareSheet = false
+    @State private var showLeaveConfirmation = false
+    @State private var isLeaving = false
 
     var body: some View {
         List {
@@ -23,7 +28,44 @@ struct GroupDetailView: View {
                 }
             }
 
+            if !members.isEmpty {
+                Section("Members (\(members.count))") {
+                    ForEach(members) { member in
+                        HStack {
+                            Text(member.displayName)
+                            if member.userID == group.ownerUserID {
+                                Text("Owner")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            if member.userID == account.userID {
+                                Text("(You)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                        }
+                    }
+                }
+            }
+
             WeeklyPickSection(group: group)
+
+            if !topRated.isEmpty {
+                Section {
+                    ForEach(topRated, id: \.item.spotifyID) { entry in
+                        NavigationLink(value: entry.item) {
+                            SongRow(item: entry.item) {
+                                StaticStarsView(rating: entry.average)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Top Rated")
+                } footer: {
+                    Text("Based on this group's most recent ratings.")
+                }
+            }
 
             if isLoading {
                 ProgressView()
@@ -39,6 +81,19 @@ struct GroupDetailView: View {
                     }
                 }
             }
+
+            Section {
+                Button(role: .destructive) {
+                    showLeaveConfirmation = true
+                } label: {
+                    if isLeaving {
+                        ProgressView()
+                    } else {
+                        Text("Leave Group")
+                    }
+                }
+                .disabled(isLeaving)
+            }
         }
         .navigationTitle(group.name)
         .navigationDestination(for: SpotifyItem.self) { item in
@@ -46,6 +101,17 @@ struct GroupDetailView: View {
         }
         .task { await load() }
         .refreshable { await load() }
+        .confirmationDialog(
+            "Leave \"\(group.name)\"?",
+            isPresented: $showLeaveConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Leave Group", role: .destructive) {
+                Task { await leave() }
+            }
+        } message: {
+            Text("You can rejoin later with the invite code.")
+        }
         .alert(
             "MusicRate",
             isPresented: Binding(get: { errorText != nil }, set: { if !$0 { errorText = nil } })
@@ -56,11 +122,39 @@ struct GroupDetailView: View {
         }
     }
 
+    private var topRated: [(item: SpotifyItem, average: Double, count: Int)] {
+        let grouped = Dictionary(grouping: feedItems, by: { $0.item.spotifyID })
+        return grouped.values
+            .compactMap { items -> (item: SpotifyItem, average: Double, count: Int)? in
+                guard let item = items.first?.item else { return nil }
+                let stars = items.map(\.rating.stars)
+                let average = Double(stars.reduce(0, +)) / Double(stars.count)
+                return (item, average, stars.count)
+            }
+            .sorted { $0.average > $1.average }
+            .prefix(5)
+            .map { $0 }
+    }
+
     private func load() async {
         isLoading = true
         defer { isLoading = false }
+        async let feedResult = store.feed(for: group)
+        async let membersResult = store.members(of: group)
         do {
-            feedItems = try await store.feed(for: group)
+            feedItems = try await feedResult
+            members = try await membersResult
+        } catch {
+            errorText = error.localizedDescription
+        }
+    }
+
+    private func leave() async {
+        isLeaving = true
+        defer { isLeaving = false }
+        do {
+            try await store.leaveGroup(group)
+            dismiss()
         } catch {
             errorText = error.localizedDescription
         }

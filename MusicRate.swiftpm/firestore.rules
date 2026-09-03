@@ -29,9 +29,16 @@ service cloud.firestore {
     }
 
     match /memberships/{membershipID} {
-      allow read: if isSignedIn() && resource.data.userID == request.auth.uid;
+      // Your own membership, or - for the group roster (GroupDetailView) -
+      // any membership in a group you're also in.
+      allow read: if isSignedIn() && (
+        resource.data.userID == request.auth.uid ||
+        isGroupMember(resource.data.groupID)
+      );
       allow create: if isSignedIn() && request.resource.data.userID == request.auth.uid;
-      allow update, delete: if false;
+      // Leaving a group (MusicStore.leaveGroup) removes your own membership only.
+      allow delete: if isSignedIn() && resource.data.userID == request.auth.uid;
+      allow update: if false;
     }
 
     // A rating is visible to its own author always, to everyone if posted

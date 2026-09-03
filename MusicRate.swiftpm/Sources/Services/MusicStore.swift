@@ -241,6 +241,30 @@ final class MusicStore: ObservableObject {
         )
     }
 
+    func members(of group: RatingGroup) async throws -> [GroupMember] {
+        let token = try await account.validIDToken()
+        let membershipDocs = try await FirestoreService.query(
+            collectionPath: "memberships",
+            equals: ["groupID": group.id],
+            idToken: token
+        )
+        var members: [GroupMember] = []
+        for doc in membershipDocs {
+            guard let userID = doc.fields["userID"] as? String, let joinedAt = doc.fields["joinedAt"] as? Date else { continue }
+            let userDoc = try? await FirestoreService.getDocument(path: "users/\(userID)", idToken: token)
+            let name = userDoc?.fields["displayName"] as? String
+            members.append(GroupMember(userID: userID, displayName: (name?.isEmpty == false ? name! : "Member"), joinedAt: joinedAt))
+        }
+        return members.sorted { $0.joinedAt < $1.joinedAt }
+    }
+
+    func leaveGroup(_ group: RatingGroup) async throws {
+        guard let userID = currentUserID else { throw MusicStoreError.notSignedIn }
+        let token = try await account.validIDToken()
+        try await FirestoreService.deleteDocument(path: "memberships/\(group.id)_\(userID)", idToken: token)
+        await refreshMyGroups()
+    }
+
     // MARK: - Firestore <-> model mapping
 
     private func songFields(_ item: SpotifyItem) -> [String: Any?] {
@@ -251,7 +275,8 @@ final class MusicStore: ObservableObject {
             "subtitle": item.subtitle,
             "artworkURL": item.artworkURL?.absoluteString,
             "spotifyURL": item.spotifyURL.absoluteString,
-            "source": item.source.rawValue
+            "source": item.source.rawValue,
+            "previewURL": item.previewURL?.absoluteString
         ]
     }
 
@@ -267,6 +292,7 @@ final class MusicStore: ObservableObject {
         else { return nil }
         let artworkURL = (fields["artworkURL"] as? String).flatMap(URL.init(string:))
         let source = (fields["source"] as? String).flatMap(MusicSource.init(rawValue:)) ?? .spotify
+        let previewURL = (fields["previewURL"] as? String).flatMap(URL.init(string:))
         return SpotifyItem(
             spotifyID: spotifyID,
             kind: kind,
@@ -274,7 +300,8 @@ final class MusicStore: ObservableObject {
             subtitle: fields["subtitle"] as? String ?? kind.displayName,
             artworkURL: artworkURL,
             spotifyURL: spotifyURL,
-            source: source
+            source: source,
+            previewURL: previewURL
         )
     }
 

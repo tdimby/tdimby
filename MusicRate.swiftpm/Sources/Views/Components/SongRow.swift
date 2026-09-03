@@ -47,7 +47,30 @@ struct SongRow: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 8)
+            if item.previewURL != nil {
+                PreviewButton(item: item)
+            }
             trailing
         }
+    }
+}
+
+/// A tappable play/pause control for a 30-second preview clip. Placed
+/// inside `SongRow`, which always lives in a `List` row - List specifically
+/// supports a plain-style button reacting on its own without also
+/// triggering the row's NavigationLink, unlike a bare HStack would.
+struct PreviewButton: View {
+    let item: SpotifyItem
+    @ObservedObject private var player = PreviewPlayer.shared
+
+    var body: some View {
+        Button {
+            player.toggle(item)
+        } label: {
+            Image(systemName: player.isPlaying(item) ? "pause.circle.fill" : "play.circle.fill")
+                .font(.system(size: 26))
+                .foregroundStyle(.tint)
+        }
+        .buttonStyle(.plain)
     }
 }

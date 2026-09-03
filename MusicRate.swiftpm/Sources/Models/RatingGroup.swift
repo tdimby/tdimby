@@ -7,3 +7,10 @@ struct RatingGroup: Identifiable, Codable, Hashable {
     let ownerUserID: String
     let createdAt: Date
 }
+
+struct GroupMember: Identifiable, Hashable {
+    var id: String { userID }
+    let userID: String
+    let displayName: String
+    let joinedAt: Date
+}

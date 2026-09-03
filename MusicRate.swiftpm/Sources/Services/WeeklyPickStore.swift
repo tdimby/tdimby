@@ -89,6 +89,7 @@ final class WeeklyPickStore: ObservableObject {
                 "songArtworkURL": item.artworkURL?.absoluteString,
                 "songSpotifyURL": item.spotifyURL.absoluteString,
                 "songSource": item.source.rawValue,
+                "songPreviewURL": item.previewURL?.absoluteString,
                 "submittedByUserID": userID,
                 "submittedByName": account.displayName,
                 "createdAt": Date()
@@ -228,6 +229,7 @@ final class WeeklyPickStore: ObservableObject {
         else { return nil }
         let source = (fields["songSource"] as? String).flatMap(MusicSource.init(rawValue:)) ?? .spotify
         let artworkURL = (fields["songArtworkURL"] as? String).flatMap(URL.init(string:))
+        let previewURL = (fields["songPreviewURL"] as? String).flatMap(URL.init(string:))
         let item = SpotifyItem(
             spotifyID: songID,
             kind: kind,
@@ -235,7 +237,8 @@ final class WeeklyPickStore: ObservableObject {
             subtitle: fields["songSubtitle"] as? String ?? kind.displayName,
             artworkURL: artworkURL,
             spotifyURL: url,
-            source: source
+            source: source,
+            previewURL: previewURL
         )
         return Submission(id: doc.id, roundID: roundID, groupID: groupID, item: item, submittedByUserID: submittedByUserID, submittedByName: submittedByName, createdAt: createdAt)
     }

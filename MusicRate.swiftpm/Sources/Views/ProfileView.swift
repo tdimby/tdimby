@@ -38,7 +38,7 @@ struct ProfileView: View {
                 if isLoading {
                     ProgressView()
                 } else if feedItems.isEmpty {
-                    Text("You haven't rated anything yet. Head to \"Search\" or \"Paste Link\" to get started.")
+                    Text("You haven't rated anything yet. Head to \"Search\" to get started.")
                         .foregroundStyle(.secondary)
                 } else {
                     Section("Your Ratings") {

@@ -55,8 +55,12 @@ struct SpotifyItem: Identifiable, Codable, Hashable {
     var artworkURL: URL?
     var spotifyURL: URL
     var source: MusicSource
+    /// A 30-second preview clip, when the source provides one (Apple Music
+    /// search results only, for now — Spotify's oEmbed lookup doesn't
+    /// include one). See `PreviewPlayer`.
+    var previewURL: URL?
 
-    init(spotifyID: String, kind: SpotifyItemKind, title: String, subtitle: String, artworkURL: URL?, spotifyURL: URL, source: MusicSource = .spotify) {
+    init(spotifyID: String, kind: SpotifyItemKind, title: String, subtitle: String, artworkURL: URL?, spotifyURL: URL, source: MusicSource = .spotify, previewURL: URL? = nil) {
         self.spotifyID = spotifyID
         self.kind = kind
         self.title = title
@@ -64,14 +68,15 @@ struct SpotifyItem: Identifiable, Codable, Hashable {
         self.artworkURL = artworkURL
         self.spotifyURL = spotifyURL
         self.source = source
+        self.previewURL = previewURL
     }
 
     private enum CodingKeys: String, CodingKey {
-        case spotifyID, kind, title, subtitle, artworkURL, spotifyURL, source
+        case spotifyID, kind, title, subtitle, artworkURL, spotifyURL, source, previewURL
     }
 
-    // Custom decode so songs saved to disk before `source` existed still
-    // load instead of silently wiping out everyone's saved ratings/groups.
+    // Custom decode so songs saved before `source`/`previewURL` existed
+    // still load instead of silently wiping out everyone's saved data.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         spotifyID = try container.decode(String.self, forKey: .spotifyID)
@@ -81,5 +86,6 @@ struct SpotifyItem: Identifiable, Codable, Hashable {
         artworkURL = try container.decodeIfPresent(URL.self, forKey: .artworkURL)
         spotifyURL = try container.decode(URL.self, forKey: .spotifyURL)
         source = try container.decodeIfPresent(MusicSource.self, forKey: .source) ?? .spotify
+        previewURL = try container.decodeIfPresent(URL.self, forKey: .previewURL)
     }
 }

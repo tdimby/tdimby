@@ -7,6 +7,7 @@ struct SearchView: View {
     @State private var browseItems: [SpotifyItem] = []
     @State private var isSearching = false
     @State private var errorText: String?
+    @State private var showPasteLink = false
 
     var body: some View {
         NavigationStack {
@@ -21,6 +22,13 @@ struct SearchView: View {
                         }
                         .pickerStyle(.segmented)
                     }
+                    ToolbarItem(placement: .primaryAction) {
+                        Button {
+                            showPasteLink = true
+                        } label: {
+                            Label("Paste a Spotify Link", systemImage: "link")
+                        }
+                    }
                 }
                 .navigationDestination(for: SpotifyItem.self) { item in
                     SongDetailView(item: item, group: nil)
@@ -30,6 +38,9 @@ struct SearchView: View {
                 }
                 .task {
                     await loadBrowseIfNeeded()
+                }
+                .sheet(isPresented: $showPasteLink) {
+                    AddLinkView()
                 }
         }
     }
@@ -43,7 +54,28 @@ struct SearchView: View {
                 } else if let errorText {
                     ContentUnavailableFallback(title: "Search failed", message: errorText, systemImage: "exclamationmark.triangle")
                 } else if results.isEmpty {
-                    ContentUnavailableFallback(title: "No results", message: "Nothing matched \"\(query)\".", systemImage: "magnifyingglass")
+                    VStack(spacing: 12) {
+                        Spacer()
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 40))
+                            .foregroundStyle(.secondary)
+                        Text("No results")
+                            .font(.headline)
+                        Text("Nothing matched \"\(query)\".")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                        Button {
+                            showPasteLink = true
+                        } label: {
+                            Label("Paste a Spotify Link Instead", systemImage: "link")
+                        }
+                        .buttonStyle(.bordered)
+                        .padding(.top, 4)
+                        Spacer()
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity)
                 } else {
                     List(results) { item in
                         NavigationLink(value: item) {
@@ -61,7 +93,7 @@ struct SearchView: View {
                 }
             } else {
                 List {
-                    Section("Popular") {
+                    Section("Top Songs") {
                         ForEach(browseItems) { item in
                             NavigationLink(value: item) {
                                 SongRow(item: item)
