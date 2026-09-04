@@ -20,11 +20,9 @@ enum MusicStoreError: LocalizedError {
     }
 }
 
-/// Backs the app with Firestore. `groupID` on a rating is
-/// `worldwideGroupID` for ratings visible to everyone, or a group's
-/// document ID for ratings scoped to that group only. (Stage 1: storage
-/// only, same visibility rules as before - the private-by-default model
-/// comes in stage 2.)
+/// Backs the app with Firestore. `groupID` on a rating is either
+/// `privateAudienceID` (visible only to its author) or a group's document
+/// ID (visible to that group's members) - see `RatingAudience`.
 @MainActor
 final class MusicStore: ObservableObject {
     private let account: AccountStore
@@ -32,7 +30,6 @@ final class MusicStore: ObservableObject {
 
     @Published var myGroups: [RatingGroup] = []
     @Published var groupMemberCounts: [String: Int] = [:]
-    @Published var worldwideFeed: [FeedItem] = []
     @Published var myRatings: [Rating] = []
     @Published var lastError: String?
 
@@ -45,7 +42,6 @@ final class MusicStore: ObservableObject {
     func start() async {
         guard account.isSignedIn else { return }
         await refreshMyGroups()
-        await refreshWorldwideFeed()
         await refreshMyRatings()
     }
 
@@ -100,7 +96,6 @@ final class MusicStore: ObservableObject {
         )
         guard let rating = rating(from: doc) else { throw FirestoreError.decodingFailed }
 
-        await refreshWorldwideFeed()
         await refreshMyRatings()
         return rating
     }
@@ -121,12 +116,11 @@ final class MusicStore: ObservableObject {
         RatingSummary(ratings: try await ratings(forSongID: songID, groupID: groupID))
     }
 
-    func feed(for group: RatingGroup?, limit: Int = 50) async throws -> [FeedItem] {
+    func feed(for group: RatingGroup, limit: Int = 50) async throws -> [FeedItem] {
         let token = try await account.validIDToken()
-        let groupID = group?.id ?? worldwideGroupID
         let docs = try await FirestoreService.query(
             collectionPath: "ratings",
-            equals: ["groupID": groupID],
+            equals: ["groupID": group.id],
             orderBy: "createdAt",
             descending: true,
             limit: limit,
@@ -139,12 +133,23 @@ final class MusicStore: ObservableObject {
         }
     }
 
-    func refreshWorldwideFeed() async {
-        do {
-            worldwideFeed = try await feed(for: nil)
-        } catch {
-            lastError = error.localizedDescription
+    /// Tally of how many ratings each member has posted to this group -
+    /// one leg of the points leaderboard (`GroupDetailView`), alongside
+    /// weekly-round submissions and wins from `WeeklyPickStore`.
+    func ratingCounts(for group: RatingGroup) async -> [String: (name: String, count: Int)] {
+        guard let token = try? await account.validIDToken() else { return [:] }
+        let docs = (try? await FirestoreService.query(
+            collectionPath: "ratings",
+            equals: ["groupID": group.id],
+            idToken: token
+        )) ?? []
+        var tally: [String: (name: String, count: Int)] = [:]
+        for doc in docs {
+            guard let userID = doc.fields["userID"] as? String else { continue }
+            let name = doc.fields["userName"] as? String ?? "Member"
+            tally[userID] = (name: name, count: (tally[userID]?.count ?? 0) + 1)
         }
+        return tally
     }
 
     func myFeedItems() async -> [FeedItem] {

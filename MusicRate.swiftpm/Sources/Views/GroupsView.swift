@@ -204,6 +204,7 @@ struct CreateGroupView: View {
         defer { isSaving = false }
         do {
             _ = try await store.createGroup(name: name, icon: icon, description: description)
+            Haptics.success()
             dismiss()
         } catch {
             errorText = error.localizedDescription
@@ -268,6 +269,7 @@ struct JoinGroupView: View {
         defer { isJoining = false }
         do {
             _ = try await store.joinGroup(inviteCode: code)
+            Haptics.success()
             dismiss()
         } catch {
             errorText = error.localizedDescription

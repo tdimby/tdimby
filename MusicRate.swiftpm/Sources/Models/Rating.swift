@@ -1,20 +1,16 @@
 import Foundation
 
-/// Sentinel `groupID` values for a rating not scoped to a specific group.
-let worldwideGroupID = "worldwide"
+/// Sentinel `groupID` value for a rating not scoped to any group.
 let privateAudienceID = "private"
 
-/// Who can see a rating: just you (the default), everyone (opted into
-/// Worldwide), or one specific group.
+/// Who can see a rating: just you (the default), or one specific group.
 enum RatingAudience: Hashable {
     case privateOnly
-    case worldwide
     case group(RatingGroup)
 
     var groupIDValue: String {
         switch self {
         case .privateOnly: return privateAudienceID
-        case .worldwide: return worldwideGroupID
         case .group(let g): return g.id
         }
     }
@@ -22,7 +18,6 @@ enum RatingAudience: Hashable {
     var displayName: String {
         switch self {
         case .privateOnly: return "Private (Just Me)"
-        case .worldwide: return "Worldwide"
         case .group(let g): return g.name
         }
     }
@@ -38,7 +33,6 @@ struct Rating: Identifiable, Codable, Hashable {
     let groupID: String
     let createdAt: Date
 
-    var isWorldwide: Bool { groupID == worldwideGroupID }
     var isPrivate: Bool { groupID == privateAudienceID }
 }
 

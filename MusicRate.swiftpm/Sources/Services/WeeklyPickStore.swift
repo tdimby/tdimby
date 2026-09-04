@@ -123,6 +123,26 @@ final class WeeklyPickStore: ObservableObject {
         currentRound = try await resolve(round, token: token)
     }
 
+    /// Tally of how many songs each member has submitted to this group's
+    /// rounds, across all rounds - not just the current one. The other leg
+    /// of the points leaderboard, alongside `MusicStore.ratingCounts` and
+    /// `leaderboard`'s wins.
+    func submissionCounts(for group: RatingGroup) async -> [String: (name: String, count: Int)] {
+        guard let token = try? await account.validIDToken() else { return [:] }
+        let docs = (try? await FirestoreService.query(
+            collectionPath: "submissions",
+            equals: ["groupID": group.id],
+            idToken: token
+        )) ?? []
+        var tally: [String: (name: String, count: Int)] = [:]
+        for doc in docs {
+            guard let userID = doc.fields["submittedByUserID"] as? String else { continue }
+            let name = doc.fields["submittedByName"] as? String ?? "Member"
+            tally[userID] = (name: name, count: (tally[userID]?.count ?? 0) + 1)
+        }
+        return tally
+    }
+
     // MARK: - Loading
 
     private func loadSubmissionSummaries(roundID: String, groupID: String, token: String) async {

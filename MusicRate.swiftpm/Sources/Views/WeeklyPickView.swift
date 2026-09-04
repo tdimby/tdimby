@@ -50,7 +50,7 @@ struct WeeklyPickSection: View {
                 DisclosureGroup("Leaderboard") {
                     ForEach(Array(weeklyPickStore.leaderboard.enumerated()), id: \.element.id) { index, entry in
                         HStack(spacing: 10) {
-                            Text(medal(for: index))
+                            Text(medalEmoji(for: index))
                                 .font(.subheadline)
                                 .frame(width: 24)
                             InitialsAvatarView(name: entry.name, size: 26)
@@ -70,19 +70,11 @@ struct WeeklyPickSection: View {
             }
         }
     }
-
-    private func medal(for index: Int) -> String {
-        switch index {
-        case 0: return "🥇"
-        case 1: return "🥈"
-        case 2: return "🥉"
-        default: return "\(index + 1)."
-        }
-    }
 }
 
 private struct WinnerRow: View {
     let summary: SubmissionSummary
+    @State private var confettiTrigger = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -97,6 +89,11 @@ private struct WinnerRow: View {
                 .foregroundStyle(.secondary)
         }
         .padding(.vertical, 4)
+        .overlay(ConfettiView(trigger: confettiTrigger).frame(height: 200).allowsHitTesting(false), alignment: .top)
+        .onAppear {
+            Haptics.success()
+            confettiTrigger += 1
+        }
     }
 }
 
@@ -327,6 +324,7 @@ struct SubmitSongView: View {
         defer { isSubmitting = false }
         do {
             try await weeklyPickStore.submitSong(item, to: round)
+            Haptics.success()
             dismiss()
         } catch {
             submitError = error.localizedDescription

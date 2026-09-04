@@ -5,8 +5,9 @@ struct SongDetailView: View {
     /// If set, this view was reached from inside that group's feed - the
     /// "Average Rating"/"Ratings" sections show that group's numbers, and
     /// the rating picker below defaults to posting back to that same
-    /// group. If nil, those sections show Worldwide, and the picker
-    /// defaults to Private (see `RatingAudience`).
+    /// group. If nil (reached from Search or Favorites), there's no
+    /// shared audience to summarize, so those sections are hidden and the
+    /// picker defaults to Private (see `RatingAudience`).
     let group: RatingGroup?
 
     @EnvironmentObject var store: MusicStore
@@ -34,18 +35,19 @@ struct SongDetailView: View {
                 }
             }
 
-            Section(group.map { "\($0.name) Average" } ?? "Worldwide Average") {
-                HStack {
-                    StaticStarsView(rating: summary.average, size: 18)
-                    Text(summaryText)
-                        .foregroundStyle(.secondary)
+            if let group {
+                Section("\(group.name) Average") {
+                    HStack {
+                        StaticStarsView(rating: summary.average, size: 18)
+                        Text(summaryText)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
 
             Section {
                 Picker("Audience", selection: $audience) {
                     Text("Private (Just Me)").tag(RatingAudience.privateOnly)
-                    Text("Worldwide").tag(RatingAudience.worldwide)
                     ForEach(store.myGroups) { group in
                         Text(group.name).tag(RatingAudience.group(group))
                     }
@@ -68,8 +70,8 @@ struct SongDetailView: View {
                 Text("Private ratings are only visible to you.")
             }
 
-            if !ratings.isEmpty {
-                Section(group.map { "\($0.name)'s Ratings" } ?? "Worldwide Ratings") {
+            if let group, !ratings.isEmpty {
+                Section("\(group.name)'s Ratings") {
                     ForEach(ratings) { rating in
                         RatingRow(rating: rating)
                     }
@@ -99,9 +101,9 @@ struct SongDetailView: View {
     }
 
     private func load() async {
+        guard let group else { return }
         do {
-            let groupID = group?.id ?? worldwideGroupID
-            ratings = try await store.ratings(forSongID: item.spotifyID, groupID: groupID)
+            ratings = try await store.ratings(forSongID: item.spotifyID, groupID: group.id)
             summary = RatingSummary(ratings: ratings)
         } catch {
             errorText = error.localizedDescription
@@ -119,6 +121,7 @@ struct SongDetailView: View {
                 audience: audience,
                 displayName: account.displayName
             )
+            Haptics.success()
             myStars = 0
             myNote = ""
             await load()

@@ -71,7 +71,6 @@ struct AddLinkView: View {
                     Section {
                         Picker("Audience", selection: $audience) {
                             Text("Private (Just Me)").tag(RatingAudience.privateOnly)
-                            Text("Worldwide").tag(RatingAudience.worldwide)
                             ForEach(store.myGroups) { group in
                                 Text(group.name).tag(RatingAudience.group(group))
                             }
@@ -168,6 +167,7 @@ struct AddLinkView: View {
                 audience: audience,
                 displayName: account.displayName
             )
+            Haptics.success()
             didSubmit = true
             stars = 0
             note = ""

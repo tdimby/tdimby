@@ -1,8 +1,10 @@
 # MusicRate
 
 A SwiftUI app for rating music you find on Spotify — paste in a share link
-or search for it, rate it, and see how it stacks up worldwide or inside a
-group of friends. Real accounts, backed by Firebase.
+or search for it, rate it, and see how it stacks up inside a group of
+friends. There's no public/global feed: every rating is either private to
+you or shared with a specific group, and groups are the heart of the app.
+Real accounts, backed by Firebase.
 
 ## Features
 
@@ -27,8 +29,8 @@ group of friends. Real accounts, backed by Firebase.
   immediately.
 - **Rate 1–5 stars** with an optional note.
 - **Private by default.** A new rating is visible only to you unless you
-  explicitly pick **Worldwide** or a specific group from the "Rate For"
-  picker — Worldwide isn't the default anymore, it's an opt-in choice.
+  explicitly pick a group from the "Rate For" picker — there's no public
+  option at all anymore (see "Why there's no Worldwide feed" below).
 - **Groups**: create a group — pick an emoji icon and an optional
   description — and share its 6-character invite code, or join one with a
   code someone shares with you — real, cross-device groups. Each group
@@ -41,18 +43,33 @@ group of friends. Real accounts, backed by Firebase.
   current invite code and issue a new one — useful if a code leaked
   somewhere it shouldn't have. Reachable via the gear icon on a group you
   own.
+- **Points Leaderboard**: every group now tracks points, not just weekly
+  wins — 1 point per rating posted to the group, 2 for submitting a song to
+  a weekly round, 5 for winning one. Ranked with medals (🥇🥈🥉) right under
+  the group's header, recomputed live from the group's actual activity (no
+  separate counter to drift out of sync).
 - **Song of the Week**: inside a group, start a round, everyone submits a
   song, everyone *except the submitter* rates it 1–5 stars, and whoever's
   submission has the best average when the round closes wins — tracked on
-  a simple per-group leaderboard. A round auto-closes 7 days after it
-  starts (checked whenever a member opens the group — see "How weekly
-  rounds close" below for why it works that way instead of a real timer).
+  a simple per-group leaderboard (and feeds the Points Leaderboard above).
+  A round auto-closes 7 days after it starts (checked whenever a member
+  opens the group — see "How weekly rounds close" below for why it works
+  that way instead of a real timer). Revealing a winner now bursts a bit of
+  confetti and a success haptic.
+- **Favorites tab**: your whole rating history in one place — stat cards
+  (total rated, average you give, 5★ count), filter chips (All/★5/★4+/Notes),
+  and the full list, pull-to-refresh. Replaces the old Worldwide tab as the
+  app's "browse your own stuff" home.
 - **Profile tab**: a real profile page, not just a settings list — an
   initials avatar (color derived from your name), stat cards for ratings
   given / groups joined / average rating you hand out, a star-by-star
   rating breakdown chart, "Member since" (the date your account was
   created), your recent rating activity, and name editing via a proper
   Edit Name sheet.
+- **A few small effects**: haptic feedback on rating/joining/submitting,
+  and a confetti burst when a weekly round reveals its winner
+  (`ConfettiView.swift`, `Haptics.swift`) — no third-party library, both
+  hand-rolled to keep the dependency list at zero.
 - **Continue as Test User**: on the sign-in screen, instantly signs into
   (or creates) a shared test account — useful for trying MusicRate out
   without typing credentials, not meant for real use.
@@ -62,6 +79,16 @@ Privacy is enforced by Firestore's **security rules**
 UI — someone hitting the database directly (not through this app) still
 can't read another person's private ratings or a group's data without
 being a member. Details below.
+
+### Why there's no Worldwide feed
+
+Earlier versions had a public "Worldwide" feed and rating audience. It's
+gone now — the app's tabs are Groups, Search, Favorites, and Profile, with
+no global feed to browse. Ratings can only be Private or posted to a
+specific group. If you have existing ratings from before with
+`groupID == "worldwide"` in Firestore, they're harmless leftovers — nothing
+in the app reads or writes that value anymore, and `firestore.rules` still
+has (unused, harmless) rules referencing it that don't need to be removed.
 
 ## Project layout
 
@@ -88,10 +115,13 @@ MusicRate.swiftpm/
       SpotifyLinkParser.swift       Extracts track/album/... IDs from links
       SpotifyMetadataService.swift  Looks up title/artist/art via oEmbed
       AppleMusicSearchService.swift Search, charts-based starter list, previews via iTunes
+      Haptics.swift                 Tiny UIKit haptic-feedback wrapper
     Views/
-      Tabs: Feed (Worldwide), Search, Groups, Profile - SignInView shown
-      instead of the tabs when signed out. AddLinkView (Paste Link) is a
-      sheet presented from Search, not a tab of its own.
+      Tabs: Groups, Search, Favorites, Profile - SignInView shown instead
+      of the tabs when signed out. AddLinkView (Paste Link) is a sheet
+      presented from Search, not a tab of its own. Components/ includes
+      ConfettiView (weekly-pick winner reveal) and shared bits like
+      InitialsAvatarView/GroupIconView/Medal.
   firestore.rules          Security rules - the real enforcement of privacy/groups
 ```
 
@@ -226,13 +256,12 @@ links directly.
 
 ## How privacy is actually enforced
 
-A rating's `groupID` field is one of: `"private"` (default), `"worldwide"`,
-or a real group's document ID (see `RatingAudience` in `Rating.swift`).
+A rating's `groupID` field is either `"private"` (default) or a real
+group's document ID (see `RatingAudience` in `Rating.swift`).
 `firestore.rules` reads that field to decide who can read a given rating
 document:
 
 - Always readable by its own author (`resource.data.userID == request.auth.uid`).
-- If `groupID == "worldwide"`, readable by anyone signed in.
 - Otherwise (a real group ID), readable only if the requester has a
   membership document for that group (`isGroupMember()` in the rules file)
   — `"private"` never matches this branch, so it's never readable by
@@ -304,6 +333,13 @@ with a long history.
   screen/Control Center integration, no background playback, and no
   explicit `AVAudioSession` configuration, since it's just a 30-second
   clip meant to play in the foreground while browsing (`PreviewPlayer.swift`).
+- **Points aren't a stored counter either** — same reasoning as the weekly
+  leaderboard: `GroupDetailView.loadPoints()` recomputes everyone's points
+  each time the group screen opens, by fetching *all* of that group's
+  ratings and submissions (not a paged/limited query). Simple and always
+  correct, at the cost of reads that scale with the group's total history
+  rather than just its recent activity — fine at personal scale, worth
+  revisiting if a group gets genuinely large.
 
 This was written without access to a Mac/Xcode or a real Firebase project
 to test against, so it hasn't been compiled or run — read it over and fix

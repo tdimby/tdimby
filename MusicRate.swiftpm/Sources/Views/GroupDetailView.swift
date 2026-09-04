@@ -8,16 +8,28 @@ struct GroupDetailView: View {
 
     @EnvironmentObject var store: MusicStore
     @EnvironmentObject var account: AccountStore
+    @EnvironmentObject var weeklyPickStore: WeeklyPickStore
     @Environment(\.dismiss) private var dismiss
 
     @State private var feedItems: [FeedItem] = []
     @State private var members: [GroupMember] = []
+    @State private var pointsEntries: [PointsEntry] = []
     @State private var isLoading = true
     @State private var errorText: String?
     @State private var showLeaveConfirmation = false
     @State private var isLeaving = false
     @State private var showSettings = false
     @State private var didCopyCode = false
+
+    private struct PointsEntry: Identifiable {
+        var id: String { userID }
+        let userID: String
+        let name: String
+        let ratings: Int
+        let submissions: Int
+        let wins: Int
+        var points: Int { ratings + submissions * 2 + wins * 5 }
+    }
 
     /// Reflects live edits made in `GroupSettingsView` - `group` itself is
     /// a fixed navigation-destination value, but `store.myGroups` gets
@@ -31,6 +43,41 @@ struct GroupDetailView: View {
     var body: some View {
         List {
             header
+
+            if !pointsEntries.isEmpty {
+                Section {
+                    ForEach(Array(pointsEntries.prefix(10).enumerated()), id: \.element.id) { index, entry in
+                        HStack(spacing: 10) {
+                            Text(medalEmoji(for: index))
+                                .font(.subheadline)
+                                .frame(width: 24)
+                            InitialsAvatarView(name: entry.name, size: 30)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(entry.name)
+                                    .font(.subheadline.weight(.semibold))
+                                Text("\(entry.ratings) rated · \(entry.submissions) submitted · \(entry.wins) win\(entry.wins == 1 ? "" : "s")")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            VStack(alignment: .trailing, spacing: 0) {
+                                Text("\(entry.points)")
+                                    .font(.headline.weight(.bold))
+                                    .foregroundStyle(.green)
+                                    .monospacedDigit()
+                                    .contentTransition(.numericText())
+                                Text("pts")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Points Leaderboard")
+                } footer: {
+                    Text("1 point per rating, 2 for submitting a weekly pick, 5 for winning one.")
+                }
+            }
 
             if !members.isEmpty {
                 Section("Members (\(members.count))") {
@@ -216,6 +263,8 @@ struct GroupDetailView: View {
             Text(value)
                 .font(.headline.weight(.bold))
                 .foregroundStyle(.white)
+                .monospacedDigit()
+                .contentTransition(.numericText())
             Text(label)
                 .font(.caption2)
                 .foregroundStyle(.white.opacity(0.75))
@@ -259,6 +308,41 @@ struct GroupDetailView: View {
         } catch {
             errorText = error.localizedDescription
         }
+        // Wins need weeklyPickStore's leaderboard, so load it before
+        // computing points rather than racing WeeklyPickSection's own
+        // (redundant, harmless) load.
+        await weeklyPickStore.load(for: group)
+        await loadPoints()
+    }
+
+    /// Combines three sources into one points leaderboard: ratings posted
+    /// to this group (`MusicStore`), songs submitted to weekly rounds, and
+    /// weekly-round wins (both `WeeklyPickStore`).
+    private func loadPoints() async {
+        async let ratingCountsResult = store.ratingCounts(for: group)
+        async let submissionCountsResult = weeklyPickStore.submissionCounts(for: group)
+        let ratingCounts = await ratingCountsResult
+        let submissionCounts = await submissionCountsResult
+        let wins = Dictionary(uniqueKeysWithValues: weeklyPickStore.leaderboard.map { ($0.userID, $0.wins) })
+
+        var userIDs = Set(ratingCounts.keys)
+        userIDs.formUnion(submissionCounts.keys)
+        userIDs.formUnion(wins.keys)
+
+        pointsEntries = userIDs.map { userID in
+            let name = ratingCounts[userID]?.name
+                ?? submissionCounts[userID]?.name
+                ?? members.first(where: { $0.userID == userID })?.displayName
+                ?? "Member"
+            return PointsEntry(
+                userID: userID,
+                name: name,
+                ratings: ratingCounts[userID]?.count ?? 0,
+                submissions: submissionCounts[userID]?.count ?? 0,
+                wins: wins[userID] ?? 0
+            )
+        }
+        .sorted { $0.points > $1.points }
     }
 
     private func leave() async {

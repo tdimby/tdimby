@@ -34,14 +34,14 @@ struct RootView: View {
 struct MainTabView: View {
     var body: some View {
         TabView {
-            FeedView()
-                .tabItem { Label("Worldwide", systemImage: "globe") }
+            GroupsView()
+                .tabItem { Label("Groups", systemImage: "person.3.fill") }
 
             SearchView()
                 .tabItem { Label("Search", systemImage: "magnifyingglass") }
 
-            GroupsView()
-                .tabItem { Label("Groups", systemImage: "person.3.fill") }
+            FavoritesView()
+                .tabItem { Label("Favorites", systemImage: "heart.fill") }
 
             ProfileView()
                 .tabItem { Label("Profile", systemImage: "person.crop.circle") }

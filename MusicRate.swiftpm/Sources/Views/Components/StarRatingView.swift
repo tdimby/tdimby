@@ -14,6 +14,7 @@ struct StarRatingView: View {
                     .foregroundStyle(position <= rating ? .yellow : .secondary.opacity(0.4))
                     .onTapGesture {
                         guard interactive else { return }
+                        Haptics.light()
                         rating = position
                     }
             }

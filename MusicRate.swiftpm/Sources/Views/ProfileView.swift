@@ -117,12 +117,16 @@ struct ProfileView: View {
                     .foregroundStyle(.secondary)
             }
         } else {
-            Section("Recent Activity") {
-                ForEach(feedItems.prefix(20)) { feedItem in
+            Section {
+                ForEach(feedItems.prefix(5)) { feedItem in
                     NavigationLink(value: feedItem.item) {
                         FeedItemRow(feedItem: feedItem)
                     }
                 }
+            } header: {
+                Text("Recent Activity")
+            } footer: {
+                Text("See everything you've rated, with filters, in the Favorites tab.")
             }
         }
     }
