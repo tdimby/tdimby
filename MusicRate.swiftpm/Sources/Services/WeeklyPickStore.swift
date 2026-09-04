@@ -26,6 +26,7 @@ final class WeeklyPickStore: ObservableObject {
     @Published var currentRound: WeeklyRound?
     @Published var submissionSummaries: [SubmissionSummary] = []
     @Published var leaderboard: [LeaderboardEntry] = []
+    @Published var pastWinners: [PastWinner] = []
     @Published var lastError: String?
     @Published private(set) var isLoading = false
 
@@ -56,7 +57,7 @@ final class WeeklyPickStore: ObservableObject {
                 currentRound = nil
                 submissionSummaries = []
             }
-            await loadLeaderboard(group: group, token: token)
+            await loadHistory(group: group, token: token)
         } catch {
             lastError = error.localizedDescription
         }
@@ -160,28 +161,46 @@ final class WeeklyPickStore: ObservableObject {
         submissionSummaries = summaries
     }
 
-    private func loadLeaderboard(group: RatingGroup, token: String) async {
+    /// Walks every resolved round for the group once, building both the
+    /// wins-based `leaderboard` and the full `pastWinners` history (song,
+    /// week, rating average) - previously each winning submission's
+    /// details were fetched just to tally a win count and then discarded,
+    /// so there was nowhere to see which songs had actually won.
+    private func loadHistory(group: RatingGroup, token: String) async {
         guard let roundDocs = try? await FirestoreService.query(
             collectionPath: "weeklyRounds",
             equals: ["groupID": group.id, "isResolved": true],
             idToken: token
         ) else {
             leaderboard = []
+            pastWinners = []
             return
         }
         var tally: [String: (name: String, wins: Int)] = [:]
+        var winners: [PastWinner] = []
         for doc in roundDocs {
             guard
+                let weekStartDate = doc.fields["weekStartDate"] as? Date,
                 let winningID = doc.fields["winningSubmissionID"] as? String,
                 let subDoc = try? await FirestoreService.getDocument(path: "submissions/\(winningID)", idToken: token),
                 let sub = submission(from: subDoc)
             else { continue }
+
             let current = tally[sub.submittedByUserID] ?? (name: sub.submittedByName, wins: 0)
             tally[sub.submittedByUserID] = (name: current.name, wins: current.wins + 1)
+
+            let ratingDocs = (try? await FirestoreService.query(collectionPath: "submissionRatings", equals: ["submissionID": sub.id], idToken: token)) ?? []
+            let ratings = ratingDocs.compactMap(submissionRating(from:))
+            let average = ratings.isEmpty ? 0 : Double(ratings.map(\.stars).reduce(0, +)) / Double(ratings.count)
+            winners.append(PastWinner(roundID: doc.id, weekStartDate: weekStartDate, submission: sub, average: average, ratingCount: ratings.count))
         }
         leaderboard = tally
             .map { LeaderboardEntry(userID: $0.key, name: $0.value.name, wins: $0.value.wins) }
             .sorted { $0.wins > $1.wins }
+        // Sorted client-side rather than via a Firestore orderBy, which
+        // would need a new composite index (groupID + isResolved +
+        // weekStartDate) beyond the ones this project already asks for.
+        pastWinners = winners.sorted { $0.weekStartDate > $1.weekStartDate }
     }
 
     /// Picks the highest-average submission (ties broken by most ratings,

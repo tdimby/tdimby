@@ -14,6 +14,7 @@ struct GroupDetailView: View {
     @State private var feedItems: [FeedItem] = []
     @State private var members: [GroupMember] = []
     @State private var pointsEntries: [PointsEntry] = []
+    @State private var hallOfFame: [ChampionEntry] = []
     @State private var isLoading = true
     @State private var errorText: String?
     @State private var showLeaveConfirmation = false
@@ -82,20 +83,26 @@ struct GroupDetailView: View {
             if !members.isEmpty {
                 Section("Members (\(members.count))") {
                     ForEach(members) { member in
-                        HStack(spacing: 10) {
-                            InitialsAvatarView(name: member.displayName, size: 32)
-                            Text(member.displayName)
-                            if member.userID == currentGroup.ownerUserID {
-                                Text("Owner")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                        NavigationLink(value: member) {
+                            HStack(spacing: 10) {
+                                InitialsAvatarView(name: member.displayName, size: 32)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(member.displayName)
+                                    if member.userID == currentGroup.ownerUserID {
+                                        Text("Owner")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                Spacer()
+                                if member.userID == account.userID {
+                                    Text("You")
+                                        .font(.caption2.weight(.semibold))
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 3)
+                                        .background(Capsule().fill(.secondary.opacity(0.12)))
+                                }
                             }
-                            if member.userID == account.userID {
-                                Text("(You)")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
                         }
                     }
                 }
@@ -103,19 +110,30 @@ struct GroupDetailView: View {
 
             WeeklyPickSection(group: currentGroup)
 
-            if !topRated.isEmpty {
+            if !hallOfFame.isEmpty {
                 Section {
-                    ForEach(topRated, id: \.item.spotifyID) { entry in
-                        NavigationLink(value: entry.item) {
-                            SongRow(item: entry.item) {
-                                StaticStarsView(rating: entry.average)
+                    ForEach(Array(hallOfFame.enumerated()), id: \.element.id) { index, entry in
+                        if index == 0 {
+                            NavigationLink(value: entry.item) {
+                                ChampionSpotlightRow(entry: entry)
+                            }
+                        } else {
+                            HStack(spacing: 10) {
+                                Text(medalEmoji(for: index))
+                                    .font(.subheadline)
+                                    .frame(width: 24)
+                                NavigationLink(value: entry.item) {
+                                    SongRow(item: entry.item) {
+                                        StaticStarsView(rating: entry.average)
+                                    }
+                                }
                             }
                         }
                     }
                 } header: {
-                    Text("Top Rated")
+                    Text("Song Champions")
                 } footer: {
-                    Text("Based on this group's most recent ratings.")
+                    Text("This group's best-rated songs of all time.")
                 }
             }
 
@@ -154,6 +172,18 @@ struct GroupDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(for: SpotifyItem.self) { item in
             SongDetailView(item: item, group: currentGroup)
+        }
+        .navigationDestination(for: GroupMember.self) { member in
+            let entry = pointsEntries.first(where: { $0.userID == member.userID })
+            MemberDetailView(
+                member: member,
+                groupName: currentGroup.name,
+                isOwner: member.userID == currentGroup.ownerUserID,
+                ratings: entry?.ratings ?? 0,
+                submissions: entry?.submissions ?? 0,
+                wins: entry?.wins ?? 0,
+                points: entry?.points ?? 0
+            )
         }
         .toolbar {
             if isOwner {
@@ -216,7 +246,7 @@ struct GroupDetailView: View {
                 HStack(spacing: 22) {
                     heroStat("\(members.count)", "Members")
                     heroStat("\(feedItems.count)", "Ratings")
-                    heroStat(topRated.first.map { String(format: "%.1f", $0.average) } ?? "–", "Top Song")
+                    heroStat(hallOfFame.first.map { String(format: "%.1f", $0.average) } ?? "–", "Top Song")
                 }
 
                 VStack(spacing: 10) {
@@ -272,20 +302,6 @@ struct GroupDetailView: View {
         .frame(minWidth: 56)
     }
 
-    private var topRated: [(item: SpotifyItem, average: Double, count: Int)] {
-        let grouped = Dictionary(grouping: feedItems, by: { $0.item.spotifyID })
-        return grouped.values
-            .compactMap { items -> (item: SpotifyItem, average: Double, count: Int)? in
-                guard let item = items.first?.item else { return nil }
-                let stars = items.map(\.rating.stars)
-                let average = Double(stars.reduce(0, +)) / Double(stars.count)
-                return (item, average, stars.count)
-            }
-            .sorted { $0.average > $1.average }
-            .prefix(5)
-            .map { $0 }
-    }
-
     private func copyInviteCode() {
         #if canImport(UIKit)
         UIPasteboard.general.string = currentGroup.inviteCode
@@ -312,7 +328,27 @@ struct GroupDetailView: View {
         // computing points rather than racing WeeklyPickSection's own
         // (redundant, harmless) load.
         await weeklyPickStore.load(for: group)
-        await loadPoints()
+        async let pointsResult: Void = loadPoints()
+        async let hallOfFameResult: Void = loadHallOfFame()
+        await pointsResult
+        await hallOfFameResult
+    }
+
+    /// Ranks the group's songs by all-time average rating, not just the
+    /// most recent 50 the "Recently Rated" list uses - a real "best song
+    /// ever posted here" competition rather than a recent-activity one.
+    private func loadHallOfFame() async {
+        let allRatings = await store.allRatings(for: group)
+        let grouped = Dictionary(grouping: allRatings, by: \.songID)
+        let songs = await store.songs(forIDs: grouped.keys)
+        hallOfFame = grouped.compactMap { songID, ratings -> ChampionEntry? in
+            guard let item = songs[songID] else { return nil }
+            let average = Double(ratings.map(\.stars).reduce(0, +)) / Double(ratings.count)
+            return ChampionEntry(item: item, average: average, count: ratings.count)
+        }
+        .sorted { $0.average == $1.average ? $0.count > $1.count : $0.average > $1.average }
+        .prefix(5)
+        .map { $0 }
     }
 
     /// Combines three sources into one points leaderboard: ratings posted
@@ -354,6 +390,118 @@ struct GroupDetailView: View {
         } catch {
             errorText = error.localizedDescription
         }
+    }
+}
+
+/// One of the group's all-time best-rated songs - "Song Champions".
+private struct ChampionEntry: Identifiable {
+    var id: String { item.spotifyID }
+    let item: SpotifyItem
+    let average: Double
+    let count: Int
+}
+
+/// The #1 spot in "Song Champions" gets a bigger, trophy-styled row
+/// instead of just another list line, the same visual treatment as a
+/// weekly-pick `WinnerRow`.
+private struct ChampionSpotlightRow: View {
+    let entry: ChampionEntry
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label("All-Time Champion", systemImage: "crown.fill")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.orange)
+            SongRow(item: entry.item) {
+                StaticStarsView(rating: entry.average)
+            }
+            Text(String(format: "%.1f average · %d rating%@", entry.average, entry.count, entry.count == 1 ? "" : "s"))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+/// A member's stats within one group - tapped from the Members list.
+private struct MemberDetailView: View {
+    let member: GroupMember
+    let groupName: String
+    let isOwner: Bool
+    let ratings: Int
+    let submissions: Int
+    let wins: Int
+    let points: Int
+
+    var body: some View {
+        List {
+            Section {
+                VStack(spacing: 14) {
+                    InitialsAvatarView(name: member.displayName, size: 88)
+                    VStack(spacing: 4) {
+                        Text(member.displayName)
+                            .font(.title2.weight(.bold))
+                        if isOwner {
+                            Label("Group Owner", systemImage: "crown.fill")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.orange)
+                        }
+                        Text("Joined \(member.joinedAt.formatted(.dateTime.month(.wide).day().year()))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+            }
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+
+            Section {
+                HStack(spacing: 10) {
+                    memberStat("\(ratings)", "Rated", "star.fill", .yellow)
+                    memberStat("\(submissions)", "Submitted", "music.note", .blue)
+                    memberStat("\(wins)", "Wins", "trophy.fill", .orange)
+                }
+            }
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+
+            Section {
+                HStack {
+                    Text("Total Points")
+                        .font(.headline)
+                    Spacer()
+                    Text("\(points)")
+                        .font(.title2.weight(.bold))
+                        .foregroundStyle(.green)
+                }
+            } footer: {
+                Text("In \(groupName): 1 point per rating, 2 per weekly submission, 5 per weekly win.")
+            }
+        }
+        .navigationTitle(member.displayName)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func memberStat(_ value: String, _ label: String, _ systemImage: String, _ tint: Color) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: systemImage)
+                .font(.title3)
+                .foregroundStyle(tint)
+            Text(value)
+                .font(.title3.weight(.bold))
+                .monospacedDigit()
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(.secondary.opacity(0.1))
+        )
     }
 }
 

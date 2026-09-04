@@ -62,6 +62,22 @@ struct WeeklyPickSection: View {
                     }
                 }
             }
+
+            if !weeklyPickStore.pastWinners.isEmpty {
+                DisclosureGroup("Past Winners (\(weeklyPickStore.pastWinners.count))") {
+                    ForEach(weeklyPickStore.pastWinners) { winner in
+                        VStack(alignment: .leading, spacing: 4) {
+                            SongRow(item: winner.submission.item) {
+                                StaticStarsView(rating: winner.average)
+                            }
+                            Text("Week of \(winner.weekStartDate.formatted(.dateTime.month(.abbreviated).day())) · by \(winner.submission.submittedByName)")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 2)
+                    }
+                }
+            }
         }
         .task { await weeklyPickStore.load(for: group) }
         .sheet(isPresented: $showSubmitSheet) {

@@ -54,16 +54,20 @@ struct FavoritesView: View {
 
     private var header: some View {
         Section {
-            VStack(spacing: 14) {
+            VStack(spacing: 10) {
                 HStack(spacing: 10) {
                     statCard("\(feedItems.count)", "Rated", "star.fill", .yellow)
                     statCard(String(format: "%.1f", averageStars), "Average", "chart.bar.fill", .green)
+                }
+                HStack(spacing: 10) {
                     statCard("\(fiveStarCount)", "5★ Loves", "heart.fill", .pink)
+                    statCard("\(currentStreak)", "Day Streak", "flame.fill", .orange)
                 }
                 Picker("Filter", selection: $filter) {
                     ForEach(Filter.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented)
+                .padding(.top, 4)
             }
             .padding(.vertical, 6)
         }
@@ -129,6 +133,31 @@ struct FavoritesView: View {
 
     private var fiveStarCount: Int {
         feedItems.filter { $0.rating.stars == 5 }.count
+    }
+
+    /// Consecutive calendar days (ending today or yesterday - rating
+    /// something today isn't required to keep yesterday's streak alive
+    /// for the rest of today) with at least one rating.
+    private var currentStreak: Int {
+        let calendar = Calendar.current
+        let days = Set(feedItems.map { calendar.startOfDay(for: $0.rating.createdAt) })
+        guard !days.isEmpty else { return 0 }
+
+        var day = calendar.startOfDay(for: Date())
+        if !days.contains(day) {
+            guard let yesterday = calendar.date(byAdding: .day, value: -1, to: day), days.contains(yesterday) else {
+                return 0
+            }
+            day = yesterday
+        }
+
+        var streak = 0
+        while days.contains(day) {
+            streak += 1
+            guard let previous = calendar.date(byAdding: .day, value: -1, to: day) else { break }
+            day = previous
+        }
+        return streak
     }
 
     private func load() async {

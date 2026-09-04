@@ -152,6 +152,30 @@ final class MusicStore: ObservableObject {
         return tally
     }
 
+    /// Every rating ever posted to this group, unlike `feed(for:)` which
+    /// caps at the most recent 50 - used for "Song Champions", a genuinely
+    /// all-time ranking rather than a recent-activity one.
+    func allRatings(for group: RatingGroup) async -> [Rating] {
+        guard let token = try? await account.validIDToken() else { return [] }
+        let docs = (try? await FirestoreService.query(
+            collectionPath: "ratings",
+            equals: ["groupID": group.id],
+            idToken: token
+        )) ?? []
+        return docs.compactMap(rating(from:))
+    }
+
+    /// Resolves song IDs to their cached `SpotifyItem` details, fetching
+    /// any not already cached.
+    func songs(forIDs ids: some Sequence<String>) async -> [String: SpotifyItem] {
+        await fetchSongs(ids: ids)
+        var result: [String: SpotifyItem] = [:]
+        for id in ids {
+            if let item = songCache[id] { result[id] = item }
+        }
+        return result
+    }
+
     func myFeedItems() async -> [FeedItem] {
         await fetchSongs(ids: myRatings.map(\.songID))
         return myRatings.compactMap { rating in

@@ -53,3 +53,14 @@ struct LeaderboardEntry: Identifiable, Hashable {
     let name: String
     let wins: Int
 }
+
+/// One resolved round's winning song, kept around for the "Past Winners"
+/// history - unlike `LeaderboardEntry`, which only survives as a tally.
+struct PastWinner: Identifiable, Hashable {
+    var id: String { roundID }
+    let roundID: String
+    let weekStartDate: Date
+    let submission: Submission
+    let average: Double
+    let ratingCount: Int
+}

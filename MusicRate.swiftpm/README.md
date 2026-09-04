@@ -34,32 +34,42 @@ Real accounts, backed by Firebase.
 - **Groups**: create a group — pick an emoji icon and an optional
   description — and share its 6-character invite code, or join one with a
   code someone shares with you — real, cross-device groups. Each group
-  shows its full **member roster**, a member count and its icon right in
-  the Groups list, and has a **Leave Group** option and a **Top Rated**
-  section surfacing its highest-rated songs (from recent activity — see
-  "Design notes" below).
+  shows its full **member roster** and has a **Leave Group** option.
+- **Members are tappable now** — each one opens their own stats page for
+  that group: when they joined, how many songs they've rated, how many
+  they've submitted to weekly picks, how many they've won, and their total
+  points.
 - **Group Settings (owner only)**: rename the group, change its icon or
   description, or tap **Generate New Code** to immediately invalidate the
   current invite code and issue a new one — useful if a code leaked
   somewhere it shouldn't have. Reachable via the gear icon on a group you
   own.
-- **Points Leaderboard**: every group now tracks points, not just weekly
+- **Points Leaderboard**: every group tracks points, not just weekly
   wins — 1 point per rating posted to the group, 2 for submitting a song to
   a weekly round, 5 for winning one. Ranked with medals (🥇🥈🥉) right under
   the group's header, recomputed live from the group's actual activity (no
   separate counter to drift out of sync).
+- **Song Champions**: a real "best song ever posted here" competition,
+  ranked by all-time average rating across the group's entire history (not
+  just recent activity) — the #1 spot gets a bigger, trophy-styled
+  spotlight card, runners-up get medals. Replaces the old "Top Rated"
+  section, which was recent-activity-only (see "Design notes" for the
+  read-cost tradeoff this makes).
 - **Song of the Week**: inside a group, start a round, everyone submits a
   song, everyone *except the submitter* rates it 1–5 stars, and whoever's
   submission has the best average when the round closes wins — tracked on
   a simple per-group leaderboard (and feeds the Points Leaderboard above).
-  A round auto-closes 7 days after it starts (checked whenever a member
-  opens the group — see "How weekly rounds close" below for why it works
-  that way instead of a real timer). Revealing a winner now bursts a bit of
+  A **Past Winners** history now remembers which song won each week, not
+  just a tally — expand it right under the weekly-pick leaderboard. A round
+  auto-closes 7 days after it starts (checked whenever a member opens the
+  group — see "How weekly rounds close" below for why it works that way
+  instead of a real timer). Revealing a winner now bursts a bit of
   confetti and a success haptic.
 - **Favorites tab**: your whole rating history in one place — stat cards
-  (total rated, average you give, 5★ count), filter chips (All/★5/★4+/Notes),
-  and the full list, pull-to-refresh. Replaces the old Worldwide tab as the
-  app's "browse your own stuff" home.
+  (total rated, average you give, 5★ count, and a 🔥 day streak for
+  consecutive days you've rated something), filter chips
+  (All/★5/★4+/Notes), and the full list, pull-to-refresh. The app's
+  "browse your own stuff" home.
 - **Profile tab**: a real profile page, not just a settings list — an
   initials avatar (color derived from your name), stat cards for ratings
   given / groups joined / average rating you hand out, a star-by-star
@@ -100,7 +110,7 @@ MusicRate.swiftpm/
     MusicRateApp.swift      App entry point
     Models/
       SpotifyItem.swift (+ MusicSource), Rating.swift (+ RatingAudience), RatingGroup.swift
-      WeeklyRound.swift        WeeklyRound, Submission, SubmissionRating, leaderboard entry
+      WeeklyRound.swift        WeeklyRound, Submission, SubmissionRating, LeaderboardEntry, PastWinner
     Services/
       FirebaseConfig.swift          Your Firebase project's API key/ID
       FirebaseAuthService.swift     Email/password auth via Firebase's REST API
@@ -319,12 +329,16 @@ with a long history.
 - Track/album/playlist metadata from Paste Link comes from Spotify's
   oEmbed endpoint, which only exposes what's needed for an embed preview
   (title, thumbnail) — not full details like duration or genre.
-- **A group's "Top Rated" is based on recent activity, not all-time.** It's
-  computed client-side from the same 50 most recent ratings the "Recently
-  Rated" list already fetches (`GroupDetailView.feed`), not a separate
-  query over the group's entire history — cheap (no extra reads), but a
-  song rated highly a long time ago can fall out of the top list once 50
-  newer ratings replace it in that window, even if nothing has "beaten" it.
+- **Song Champions fetches the group's entire rating history, not a page
+  of it** (`MusicStore.allRatings`/`loadHallOfFame`) — that's what makes
+  it genuinely all-time instead of recent-activity-only like the old "Top
+  Rated" section was, but it's the same read-cost tradeoff as the Points
+  Leaderboard: scales with the group's total history, fine at personal
+  scale.
+- **Past Winners has the same tradeoff again**: `WeeklyPickStore.loadHistory`
+  fetches every resolved round for the group (plus that round's winning
+  submission and its ratings) every time the group screen opens, not just
+  the current one.
 - **No owner transfer.** A group's owner can leave like anyone else (Leave
   Group doesn't check for this), which leaves the group without anyone who
   can rename it (`groups`' `update` rule requires `ownerUserID`) — not
