@@ -517,39 +517,47 @@
     const tail = sv3(0, 0.35, -4.4);
 
     const faces = [
-      { v: [nose, top, tail], color: colors.top },
-      { v: [nose, tail, bot], color: colors.bottom },
-      { v: [nose, left, tail], color: colors.left },
-      { v: [nose, tail, right], color: colors.right },
+      { v: [nose, top, tail], color: colors.top, part: "fuselage" },
+      { v: [nose, tail, bot], color: colors.bottom, part: "fuselage" },
+      { v: [nose, left, tail], color: colors.left, part: "fuselage" },
+      { v: [nose, tail, right], color: colors.right, part: "fuselage" },
     ];
 
     // wings (quad each side, split into 2 tris)
     const wL_rootF = sv3(-0.85, 0.1, 0.7), wL_rootB = sv3(-0.85, 0.05, -0.7);
     const wL_tipB = sv3(-5.3, -0.05, -1.5), wL_tipF = sv3(-4.6, 0, -0.1);
-    faces.push({ v: [wL_rootF, wL_rootB, wL_tipB], color: colors.wing });
-    faces.push({ v: [wL_rootF, wL_tipB, wL_tipF], color: colors.wing });
+    faces.push({ v: [wL_rootF, wL_rootB, wL_tipB], color: colors.wing, part: "wingL" });
+    faces.push({ v: [wL_rootF, wL_tipB, wL_tipF], color: colors.wing, part: "wingL" });
 
     const wR_rootF = sv3(0.85, 0.1, 0.7), wR_rootB = sv3(0.85, 0.05, -0.7);
     const wR_tipB = sv3(5.3, -0.05, -1.5), wR_tipF = sv3(4.6, 0, -0.1);
-    faces.push({ v: [wR_rootF, wR_tipB, wR_rootB], color: colors.wing });
-    faces.push({ v: [wR_rootF, wR_tipF, wR_tipB], color: colors.wing });
+    faces.push({ v: [wR_rootF, wR_tipB, wR_rootB], color: colors.wing, part: "wingR" });
+    faces.push({ v: [wR_rootF, wR_tipF, wR_tipB], color: colors.wing, part: "wingR" });
 
     // tail fin
-    faces.push({ v: [sv3(0, 0.3, -3.0), sv3(0, 0.3, -4.5), sv3(0, 2.0, -4.0)], color: colors.fin });
+    faces.push({ v: [sv3(0, 0.3, -3.0), sv3(0, 0.3, -4.5), sv3(0, 2.0, -4.0)], color: colors.fin, part: "tail" });
 
     // horizontal stabilizers
     const hsL_root = sv3(-0.15, 0.32, -3.3), hsL_tip = sv3(-1.9, 0.22, -4.0), hsL_back = sv3(-0.15, 0.32, -4.3);
-    faces.push({ v: [hsL_root, hsL_tip, hsL_back], color: colors.wing });
+    faces.push({ v: [hsL_root, hsL_tip, hsL_back], color: colors.wing, part: "tail" });
     const hsR_root = sv3(0.15, 0.32, -3.3), hsR_tip = sv3(1.9, 0.22, -4.0), hsR_back = sv3(0.15, 0.32, -4.3);
-    faces.push({ v: [hsR_root, hsR_back, hsR_tip], color: colors.wing });
+    faces.push({ v: [hsR_root, hsR_back, hsR_tip], color: colors.wing, part: "tail" });
 
     // canopy
     faces.push({
       v: [sv3(-0.3, 1.05, 1.1), sv3(0.3, 1.05, 1.1), sv3(0.22, 1.35, 0.35), sv3(-0.22, 1.35, 0.35)],
-      color: colors.canopy,
+      color: colors.canopy, part: "fuselage",
     });
 
-    return { faces, noseLocal: nose, tailLocal: sv3(0, 0.2, -4.6) };
+    return {
+      faces, noseLocal: nose, tailLocal: sv3(0, 0.2, -4.6),
+      partMarkers: {
+        engine: nose,
+        wingL: sv3(-3.2, 0, -0.4),
+        wingR: sv3(3.2, 0, -0.4),
+        tail: sv3(0, 0.6, -4.0),
+      },
+    };
   }
 
   const PLANE_ARCHETYPES = [
@@ -558,7 +566,7 @@
       desc: "Fast & twitchy. Light frame, thin armor.",
       stats: { speed: 0.9, agility: 1.0, armor: 0.35, firepower: 0.55 },
       maxSpeed: 430, cruiseSpeed: 230, stallSpeed: 108, accel: 170,
-      rollRate: 3.1, pitchRate: 2.35, health: 65,
+      rollRate: 2.0, pitchRate: 1.3, health: 65, componentMax: 34,
       fireRate: 10, gunDamage: 5.5, gunRange: 480,
       boostMult: 1.5, boostFuelMax: 3.2, boostDrain: 1.0, boostRegen: 0.5,
       colors: { top: "#eef6fb", bottom: "#3a4b57", left: "#4fa8d8", right: "#4fa8d8", wing: "#dce8ee", fin: "#4fa8d8", canopy: "#12222c" },
@@ -568,7 +576,7 @@
       desc: "Slow to turn, hard to kill. Hits like a truck.",
       stats: { speed: 0.55, agility: 0.4, armor: 1.0, firepower: 1.0 },
       maxSpeed: 340, cruiseSpeed: 200, stallSpeed: 128, accel: 110,
-      rollRate: 1.7, pitchRate: 1.3, health: 130,
+      rollRate: 1.05, pitchRate: 0.72, health: 130, componentMax: 52,
       fireRate: 6.5, gunDamage: 11, gunRange: 460,
       boostMult: 1.25, boostFuelMax: 2.6, boostDrain: 1.1, boostRegen: 0.45,
       colors: { top: "#ffdf8f", bottom: "#6b5228", left: "#e0a23b", right: "#e0a23b", wing: "#f5d99a", fin: "#e0a23b", canopy: "#12222c" },
@@ -578,7 +586,7 @@
       desc: "No weaknesses, no extremes. A safe bet.",
       stats: { speed: 0.72, agility: 0.68, armor: 0.65, firepower: 0.75 },
       maxSpeed: 380, cruiseSpeed: 215, stallSpeed: 118, accel: 140,
-      rollRate: 2.35, pitchRate: 1.8, health: 95,
+      rollRate: 1.45, pitchRate: 0.95, health: 95, componentMax: 41,
       fireRate: 8, gunDamage: 7.5, gunRange: 470,
       boostMult: 1.35, boostFuelMax: 3.0, boostDrain: 1.0, boostRegen: 0.5,
       colors: { top: "#c9f7de", bottom: "#2d5443", left: "#3ecf8e", right: "#3ecf8e", wing: "#a9ecc9", fin: "#3ecf8e", canopy: "#12222c" },
@@ -655,19 +663,36 @@
   let shake = 0;
   let boundsWarnTimer = 0;
 
+  function makeComponent(max) {
+    return { health: max, max, destroyed: false, onFire: false };
+  }
+
+  function resetAircraftDamage(ac) {
+    const cmax = ac.archetype.componentMax || 35;
+    ac.health = ac.archetype.health;
+    ac.maxHealth = ac.archetype.health;
+    ac.components = {
+      engine: makeComponent(cmax),
+      wingL: makeComponent(cmax),
+      wingR: makeComponent(cmax),
+      tail: makeComponent(cmax * 0.85),
+    };
+    ac.doomed = false;
+  }
+
   function makeAircraft(archetype, isPlayer) {
-    return {
+    const ac = {
       isPlayer,
       archetype,
       mesh: buildPlaneMesh(archetype.colors),
       pos: v3(0, 400, 0),
       basis: makeBasis(),
+      angVel: { pitch: 0, roll: 0, yaw: 0 },
+      currentG: 1,
       speed: archetype.cruiseSpeed,
       throttle: 0.75,
       boostFuel: archetype.boostFuelMax,
       boosting: false,
-      health: archetype.health,
-      maxHealth: archetype.health,
       alive: true,
       stalling: false,
       fireCooldown: 0,
@@ -678,6 +703,8 @@
       aiTimer: rand(0, 2),
       invuln: 0,
     };
+    resetAircraftDamage(ac);
+    return ac;
   }
 
   function resetGame() {
@@ -713,9 +740,10 @@
         maxSpeed: isAce ? 360 : 300,
         cruiseSpeed: isAce ? 280 : 230,
         stallSpeed: 100,
-        rollRate: isAce ? 2.2 : 1.6,
-        pitchRate: isAce ? 1.9 : 1.3,
+        rollRate: isAce ? 1.3 : 0.95,
+        pitchRate: isAce ? 0.9 : 0.65,
         health: isAce ? 90 : 55,
+        componentMax: isAce ? 45 : 32,
         fireRate: isAce ? 7 : 4.5,
         gunDamage: isAce ? 8 : 6,
         gunRange: 460,
@@ -751,9 +779,48 @@
     }
   }
 
-  function damageAircraft(ac, dmg, sourceIsPlayer) {
+  // classify a world-space hit point into a structural component, or null for a general/fuselage hit
+  function resolveHitComponent(ac, hitPos) {
+    const rel = vSub(hitPos, ac.pos);
+    const lx = vDot(rel, ac.basis.right);
+    const lz = vDot(rel, ac.basis.forward);
+    const wingSpan = 3.0 * MESH_SCALE;
+    if (Math.abs(lx) > wingSpan) return lx < 0 ? "wingL" : "wingR";
+    if (lz < -2.6 * MESH_SCALE) return "tail";
+    if (lz > 1.5 * MESH_SCALE) return "engine";
+    return null;
+  }
+
+  function worldPartPos(ac, part) {
+    const lv = ac.mesh.partMarkers[part];
+    return vAdd(ac.pos, vAdd(vScale(ac.basis.right, lv.x), vAdd(vScale(ac.basis.up, lv.y), vScale(ac.basis.forward, lv.z))));
+  }
+
+  function damageComponent(ac, part, dmg) {
+    if (!part) return;
+    const c = ac.components[part];
+    if (!c || c.destroyed) return;
+    c.health -= dmg;
+    if ((part === "engine" || part === "wingL" || part === "wingR") && !c.onFire && Math.random() < 0.14) {
+      c.onFire = true;
+    }
+    if (c.health <= 0) {
+      c.health = 0;
+      c.destroyed = true;
+      c.onFire = false;
+      sfxExplosion(false);
+      addParticles(worldPartPos(ac, part), 14, "90,88,92", [20, 80], [0.3, 0.6]);
+      if (part === "wingL" || part === "wingR") ac.doomed = true;
+    }
+  }
+
+  function damageAircraft(ac, dmg, sourceIsPlayer, hitPos) {
     if (!ac.alive || ac.invuln > 0) return;
     ac.health -= dmg;
+    if (hitPos) {
+      const part = resolveHitComponent(ac, hitPos);
+      if (part) damageComponent(ac, part, dmg);
+    }
     if (ac === player) {
       flashHit();
     }
@@ -784,7 +851,8 @@
     } else {
       setTimeout(() => {
         player.alive = true;
-        player.health = player.archetype.health;
+        resetAircraftDamage(player);
+        player.angVel = { pitch: 0, roll: 0, yaw: 0 };
         player.pos = v3(rand(-200, 200), 450, rand(-200, 200));
         player.basis = makeBasis();
         player.speed = player.archetype.cruiseSpeed;
@@ -960,6 +1028,19 @@
   /* =========================================================================
      FLIGHT UPDATE
   ========================================================================= */
+  const G_DIVISOR = 46; // tuned so a hard sustained turn at cruise speed reads as ~5-7G
+
+  // sustained extreme G risks tearing a wing off — the natural check on yanking the stick at speed
+  function applyGStressRisk(ac, dt) {
+    if (ac.currentG <= 9.5) return;
+    const excess = ac.currentG - 9.5;
+    const chancePerSec = clamp(excess * 0.12, 0, 0.9);
+    if (Math.random() < chancePerSec * dt) {
+      const side = Math.random() < 0.5 ? "wingL" : "wingR";
+      damageComponent(ac, side, 999);
+    }
+  }
+
   function updatePlayer(dt) {
     const ac = player;
     if (ac.invuln > 0) ac.invuln -= dt;
@@ -1000,26 +1081,57 @@
 
   function flyAircraft(ac, pitchIn, rollIn, dt) {
     const a = ac.archetype;
-    const targetSpeed = lerp(a.stallSpeed * 0.85, a.maxSpeed, ac.throttle);
+    const comp = ac.components;
+    const engineFactor = comp.engine.destroyed ? 0.15 : (0.4 + 0.6 * comp.engine.health / comp.engine.max);
+    const wingLFactor = comp.wingL.destroyed ? 0 : comp.wingL.health / comp.wingL.max;
+    const wingRFactor = comp.wingR.destroyed ? 0 : comp.wingR.health / comp.wingR.max;
+    const tailFactor = comp.tail.destroyed ? 0.2 : (0.3 + 0.7 * comp.tail.health / comp.tail.max);
+    const wingLost = comp.wingL.destroyed || comp.wingR.destroyed;
+    const wingAuthority = wingLost ? 0.15 : clamp((wingLFactor + wingRFactor) / 2, 0.3, 1);
+    // asymmetric wing damage rolls the plane toward the weaker side on its own — this is an
+    // aerodynamic effect, not a control input, so it isn't crushed by the same authority loss
+    // that limits how hard the player can fight it (that asymmetry is the point: it's why a
+    // lost wing is catastrophic rather than just "stiffer controls")
+    const wingBias = wingLost ? (comp.wingR.destroyed ? 1.8 : -1.8) : (wingLFactor - wingRFactor) * 1.6;
+
+    const targetSpeed = lerp(a.stallSpeed * 0.85, a.maxSpeed, ac.throttle) * engineFactor;
     let speedGoal = targetSpeed;
-    if (ac.boosting) speedGoal = a.maxSpeed * a.boostMult;
+    if (ac.boosting && !comp.engine.destroyed) speedGoal = a.maxSpeed * a.boostMult * engineFactor;
     ac.speed = lerp(ac.speed, speedGoal, 1 - Math.exp(-((ac.boosting ? 2.2 : 1) * a.accel / 200) * dt));
 
     // energy trade: diving builds speed, climbing bleeds it
     ac.speed += -ac.basis.forward.y * 55 * dt;
-    ac.speed = clamp(ac.speed, 20, a.maxSpeed * (ac.boosting ? a.boostMult : 1) + 10);
 
     ac.stalling = ac.speed < a.stallSpeed;
     if (ac.stalling && !ac.wasStalling && ac.isPlayer) sfxStall();
     ac.wasStalling = ac.stalling;
-    const authority = ac.stalling ? 0.35 : 1;
-    let effPitch = pitchIn * a.pitchRate * authority;
-    if (ac.stalling) effPitch += 0.7; // forced nose-drop
-    const effRoll = rollIn * a.rollRate * authority;
-    const effYaw = rollIn * a.rollRate * 0.35 * authority; // coordinated turn assist
 
-    ac.basis = applyRotation(ac.basis, effPitch * dt, effRoll * dt, effYaw * dt);
+    const stallAuthority = ac.stalling ? 0.35 : 1;
+    const gAuthority = ac.currentG > 7 ? clamp(1 - (ac.currentG - 7) * 0.08, 0.35, 1) : 1;
+
+    let effPitch = pitchIn * a.pitchRate * tailFactor * stallAuthority * gAuthority * (wingLost ? 0.5 : 1);
+    if (ac.stalling) effPitch += 0.7 * stallAuthority;
+    if (wingLost) effPitch += 0.5; // lost lift on one side noses the plane down too
+    const effRoll = rollIn * a.rollRate * gAuthority * wingAuthority + wingBias;
+    const effYaw = rollIn * a.rollRate * 0.3 * tailFactor * wingAuthority;
+
+    // angular inertia: control surfaces accelerate the plane's rotation, they don't snap it
+    const k = 1 - Math.exp(-5.5 * dt);
+    ac.angVel.pitch = lerp(ac.angVel.pitch, effPitch, k);
+    ac.angVel.roll = lerp(ac.angVel.roll, effRoll, k);
+    ac.angVel.yaw = lerp(ac.angVel.yaw, effYaw, k);
+
+    // G-force from the resulting turn rate, plus its consequences
+    ac.currentG = 1 + (ac.speed * Math.hypot(ac.angVel.pitch, ac.angVel.yaw)) / G_DIVISOR;
+    applyGStressRisk(ac, dt);
+    ac.speed -= (ac.currentG - 1) * 6 * dt; // induced drag: hard turns cost energy
+    ac.speed = clamp(ac.speed, 20, a.maxSpeed * (ac.boosting ? a.boostMult : 1) + 10);
+
+    ac.basis = applyRotation(ac.basis, ac.angVel.pitch * dt, ac.angVel.roll * dt, ac.angVel.yaw * dt);
     ac.pos = vAdd(ac.pos, vScale(ac.basis.forward, ac.speed * dt));
+    // a broken airframe can't hold altitude no matter how the fight against it goes —
+    // the chaos above sells the loss of control, this guarantees it's not survivable forever
+    if (wingLost) ac.pos.y -= 28 * dt;
   }
 
   function fireGun(ac) {
@@ -1054,11 +1166,21 @@
     if (!ac.alive) return;
     ac.aiTimer -= dt;
 
+    const comp = ac.components;
+    const engineFactor = comp.engine.destroyed ? 0.15 : (0.4 + 0.6 * comp.engine.health / comp.engine.max);
+    const wingLFactor = comp.wingL.destroyed ? 0 : comp.wingL.health / comp.wingL.max;
+    const wingRFactor = comp.wingR.destroyed ? 0 : comp.wingR.health / comp.wingR.max;
+    const tailFactor = comp.tail.destroyed ? 0.2 : (0.3 + 0.7 * comp.tail.health / comp.tail.max);
+    const wingAuthority = (comp.wingL.destroyed || comp.wingR.destroyed) ? 0.1 : clamp((wingLFactor + wingRFactor) / 2, 0.3, 1);
+
     const toPlayer = vSub(player.pos, ac.pos);
     const dist = vLen(toPlayer);
     let desired;
 
-    if (ac.pos.y < 140) {
+    if (ac.doomed) {
+      // lost a wing: spiraling in, barely controllable
+      desired = v3(ac.basis.forward.x + rand(-0.4, 0.4), -0.6, ac.basis.forward.z + rand(-0.4, 0.4));
+    } else if (ac.pos.y < 140) {
       desired = v3(ac.basis.forward.x, 0.6, ac.basis.forward.z);
     } else if (dist > 30) {
       const predictedPlayerPos = vAdd(player.pos, vScale(player.basis.forward, player.speed * 0.55));
@@ -1067,22 +1189,27 @@
       desired = ac.basis.forward;
     }
 
-    const maxTurn = ac.archetype.rollRate * 0.85 * dt;
+    const maxTurn = ac.archetype.rollRate * 0.85 * tailFactor * wingAuthority * dt;
     ac.basis = turnToward(ac.basis, desired, maxTurn);
 
-    const targetSpeed = ac.archetype.cruiseSpeed * (dist < 500 ? 1.15 : 1) * (ac.aggro || 1);
+    const targetSpeed = ac.archetype.cruiseSpeed * (dist < 500 ? 1.15 : 1) * (ac.aggro || 1) * engineFactor;
     ac.speed = lerp(ac.speed, clamp(targetSpeed, ac.archetype.stallSpeed * 1.1, ac.archetype.maxSpeed), 1 - Math.exp(-1.2 * dt));
     ac.speed += -ac.basis.forward.y * 40 * dt;
     ac.speed = clamp(ac.speed, ac.archetype.stallSpeed, ac.archetype.maxSpeed * 1.05);
     ac.pos = vAdd(ac.pos, vScale(ac.basis.forward, ac.speed * dt));
+    if (ac.doomed) ac.pos.y -= 28 * dt;
 
     ac.fireCooldown -= dt;
-    if (player.alive && dist < ac.archetype.gunRange && dist > 25) {
+    if (!ac.doomed && player.alive && dist < ac.archetype.gunRange && dist > 25) {
       const facing = vDot(ac.basis.forward, vNorm(toPlayer));
       if (facing > 0.965 && ac.fireCooldown <= 0) {
         fireGun(ac);
         ac.fireCooldown = 1 / ac.archetype.fireRate + rand(0, 0.3);
       }
+    }
+
+    if (ac.pos.y <= GROUND_Y + 4) {
+      damageAircraft(ac, 999, false);
     }
 
     const distFromCenter = Math.hypot(ac.pos.x, ac.pos.z);
@@ -1107,10 +1234,10 @@
       if (b.isPlayer) {
         for (const e of enemies) {
           if (!e.alive) continue;
-          if (vLen2(vSub(e.pos, b.pos)) < (6 * MESH_SCALE) * (6 * MESH_SCALE)) { damageAircraft(e, b.dmg, true); hit = true; sfxHit(); break; }
+          if (vLen2(vSub(e.pos, b.pos)) < (6 * MESH_SCALE) * (6 * MESH_SCALE)) { damageAircraft(e, b.dmg, true, b.pos); hit = true; sfxHit(); break; }
         }
       } else if (player.alive) {
-        if (vLen2(vSub(player.pos, b.pos)) < (5.5 * MESH_SCALE) * (5.5 * MESH_SCALE)) { damageAircraft(player, b.dmg, false); hit = true; }
+        if (vLen2(vSub(player.pos, b.pos)) < (5.5 * MESH_SCALE) * (5.5 * MESH_SCALE)) { damageAircraft(player, b.dmg, false, b.pos); hit = true; }
       }
       if (hit) bullets.splice(i, 1);
     }
@@ -1136,8 +1263,29 @@
     updateBullets(dt);
     updateParticles(dt);
 
-    // smoke trail for damaged aircraft
+    // per-component damage effects: fire damage-over-time, smoke, burnout
     for (const ac of [player, ...enemies]) {
+      if (!ac.alive) continue;
+      for (const part of ["engine", "wingL", "wingR", "tail"]) {
+        const c = ac.components[part];
+        if (c.onFire) {
+          ac.health -= 4 * dt;
+          c.health -= 2 * dt;
+          if (c.health <= 0 && !c.destroyed) {
+            c.health = 0;
+            c.destroyed = true;
+            c.onFire = false;
+            if (part === "wingL" || part === "wingR") ac.doomed = true;
+          }
+          if (Math.random() < 0.03 * dt) c.onFire = false; // ~3%/sec chance the fire burns itself out
+          const wp = worldPartPos(ac, part);
+          addParticles(wp, 2, "255,120,40", [4, 18], [0.2, 0.4]);
+          addParticles(wp, 1, "60,60,60", [2, 8], [0.3, 0.6]);
+          if (ac.health <= 0) { killAircraft(ac); break; }
+        } else if (c.destroyed && part !== "tail") {
+          addParticles(worldPartPos(ac, part), 1, "70,70,72", [3, 10], [0.3, 0.6]);
+        }
+      }
       if (ac.alive && ac.health < ac.maxHealth * 0.35) {
         addParticles(ac.pos, 1, "90,90,90", [3, 10], [0.4, 0.8]);
       }
@@ -1324,7 +1472,9 @@
     for (const ac of [player, ...enemies]) {
       if (!ac.alive) continue;
       if (ac.invuln > 0 && Math.floor(ac.invuln * 8) % 2 === 0) continue;
+      const scorch = clamp(1 - ac.health / ac.maxHealth, 0, 1) * 0.35;
       for (const face of ac.mesh.faces) {
+        if (face.part !== "fuselage" && ac.components[face.part] && ac.components[face.part].destroyed) continue;
         const worldVerts = face.v.map((lv) =>
           vAdd(ac.pos, vAdd(vScale(ac.basis.right, lv.x), vAdd(vScale(ac.basis.up, lv.y), vScale(ac.basis.forward, lv.z))))
         );
@@ -1332,7 +1482,8 @@
         if (proj.some((p) => !p)) continue;
         const avgDepth = proj.reduce((s, p) => s + p.depth, 0) / proj.length;
         const fog = fogBlend(avgDepth * 0.55);
-        const color = mixColor(face.color, SKY_HAZE, fog * 0.6);
+        let color = mixColor(face.color, SKY_HAZE, fog * 0.6);
+        if (scorch > 0) color = mixColor(face.color, "#0a0a0a", scorch);
         queue.push({
           depth: avgDepth,
           draw: () => {
@@ -1348,22 +1499,24 @@
           },
         });
       }
-      // prop blur billboard
-      const noseWorld = vAdd(ac.pos, vScale(ac.basis.forward, 5.0 * MESH_SCALE));
-      const pn = project(noseWorld, cam.pos, cam.basis);
-      if (pn) {
-        const s = (1.1 * MESH_SCALE * FOCAL) / pn.depth;
-        queue.push({
-          depth: pn.depth - 0.01,
-          draw: () => {
-            ctx.globalAlpha = 0.35;
-            ctx.fillStyle = "#cfcfcf";
-            ctx.beginPath();
-            ctx.ellipse(pn.x, pn.y, s, s, 0, 0, TAU);
-            ctx.fill();
-            ctx.globalAlpha = 1;
-          },
-        });
+      // prop blur billboard (stops once the engine is gone)
+      if (!ac.components.engine.destroyed) {
+        const noseWorld = vAdd(ac.pos, vScale(ac.basis.forward, 5.0 * MESH_SCALE));
+        const pn = project(noseWorld, cam.pos, cam.basis);
+        if (pn) {
+          const s = (1.1 * MESH_SCALE * FOCAL) / pn.depth;
+          queue.push({
+            depth: pn.depth - 0.01,
+            draw: () => {
+              ctx.globalAlpha = 0.35;
+              ctx.fillStyle = "#cfcfcf";
+              ctx.beginPath();
+              ctx.ellipse(pn.x, pn.y, s, s, 0, 0, TAU);
+              ctx.fill();
+              ctx.globalAlpha = 1;
+            },
+          });
+        }
       }
     }
 
@@ -1444,11 +1597,45 @@
     ctx.fillRect(x, y, w, h);
   }
 
+  function drawGVignette(cxr, cyr) {
+    const g = player.currentG || 1;
+    if (g <= 4) return;
+    const intensity = clamp((g - 4) / 8, 0, 1);
+    const grad = ctx.createRadialGradient(cxr, cyr, RH * 0.22, cxr, cyr, RH * 0.78);
+    grad.addColorStop(0, "rgba(0,0,0,0)");
+    grad.addColorStop(1, `rgba(8,8,8,${intensity * 0.85})`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, RW, RH);
+  }
+
+  const SYSTEM_LABELS = [["E", "engine"], ["L", "wingL"], ["R", "wingR"], ["T", "tail"]];
+  function drawSystemsStatus(cxr, y) {
+    const boxW = 16, gap = 3;
+    const totalW = SYSTEM_LABELS.length * boxW + (SYSTEM_LABELS.length - 1) * gap;
+    let sx = cxr - totalW / 2;
+    hudPanel(sx - 4, y - 4, totalW + 8, 16);
+    for (const [label, key] of SYSTEM_LABELS) {
+      const c = player.components[key];
+      let color;
+      if (c.destroyed) color = "#3a3a3a";
+      else if (c.onFire) color = Math.floor(performance.now() / 150) % 2 === 0 ? "#ff4b3e" : "#ffb100";
+      else if (c.health / c.max < 0.4) color = "#ffb100";
+      else color = "#3dffa0";
+      ctx.fillStyle = color;
+      ctx.fillRect(sx, y, boxW - 2, 8);
+      ctx.fillStyle = c.destroyed ? "#aaa" : "#05080a";
+      ctx.fillText(label, sx + 4, y);
+      sx += boxW + gap;
+    }
+  }
+
   function drawHudCanvas() {
     if (state !== "playing" && state !== "paused") return;
     ctx.font = "8px monospace";
     ctx.textBaseline = "top";
     const cxr = RW / 2, cyr = RH / 2;
+
+    drawGVignette(cxr, cyr);
 
     // backing panels so HUD stays legible over any sky/ground/cloud behind it
     hudPanel(4, 4, 80, 28);              // hull
@@ -1457,6 +1644,7 @@
     hudPanel(4, RH - 58, 96, 52);        // speed / throttle / boost
     hudPanel(RW - 78, RH - 58, 74, 52);  // altitude / heat
     hudPanel(cxr - 32, RH - 16, 64, 14); // heading
+    drawSystemsStatus(cxr, RH - 78);
 
     // reticle
     ctx.strokeStyle = "rgba(61,255,160,0.8)";
@@ -1476,9 +1664,17 @@
     ctx.fillStyle = "#3dffa0";
     ctx.fillText("SPD " + Math.round(player.speed), 8, RH - 48);
     ctx.fillText("ALT " + Math.round(player.pos.y), RW - 74, RH - 48);
+    ctx.fillStyle = player.currentG > 8 ? "#ff4b3e" : player.currentG > 5 ? "#ffb100" : "#3dffa0";
+    ctx.fillText(player.currentG.toFixed(1) + "G", RW - 74, RH - 58);
     if (player.stalling) {
       ctx.fillStyle = Math.floor(performance.now() / 150) % 2 === 0 ? "#ff4b3e" : "#ffb100";
       ctx.fillText("STALL", cxr - 16, 8);
+    }
+    if (player.doomed) {
+      ctx.fillStyle = Math.floor(performance.now() / 120) % 2 === 0 ? "#ff4b3e" : "#fff";
+      ctx.font = "9px monospace";
+      ctx.fillText("STRUCTURAL FAILURE", cxr - 68, RH / 2 + 40);
+      ctx.font = "8px monospace";
     }
 
     // throttle + boost (label row, then bar row)

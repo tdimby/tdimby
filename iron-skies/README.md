@@ -39,21 +39,37 @@ on phones and tablets.
 - Pick one of three fighters before takeoff — an agile **Interceptor**, a
   tanky **Heavy Fighter**, or a balanced **All-Rounder** — each with
   different speed, agility, armor and firepower.
+- Controls have real weight: inputs accelerate the plane's rotation rather
+  than snapping it, so turns build up and wind down like an aircraft with
+  mass and control-surface lag, not a cursor.
 - Fly with a simplified energy model: **diving builds speed, climbing
   bleeds it**. Let your speed drop too low and you'll stall — the nose
-  drops and controls go mushy until you dive to recover. This is the same
-  energy-management dogfighting real arcade flight games (and War Thunder)
-  are built around.
+  drops and controls go mushy until you dive to recover.
+- **G-force is real and has consequences.** Hard turns pull real G (shown
+  live in the HUD), which bleeds energy, darkens your vision at the edges
+  the harder you pull, and saps control authority above ~7G. Push much
+  past that under sustained load and you risk tearing a wing off — the
+  natural check on yanking the stick at speed instead of an invisible wall.
+- **Component damage, not just a health bar.** Every hit lands on a
+  specific part — engine, left wing, right wing, or tail — tracked
+  separately from overall hull integrity, shown live in the HUD (E/L/R/T).
+  Lose the engine and you're gliding on whatever speed and altitude you
+  had left. Lose a wing and the aircraft becomes barely controllable and
+  will eventually go down — no coming back from that one. Damaged parts
+  can catch fire and burn until they're destroyed (or, rarely, burn out on
+  their own), and destroyed wings/tail sections visibly disappear from the
+  aircraft.
 - Guns overheat with sustained fire — watch the heat gauge.
 - Waves of enemy fighters escalate in number and skill (grunts, then
-  tougher "aces" mixed in). Downed aircraft are worth more score at higher
-  tiers.
+  tougher "aces" mixed in), and take the same component damage you do —
+  shoot a wing off an enemy and watch it spiral in. Downed aircraft are
+  worth more score at higher tiers.
 - Stray too far from the combat zone and you'll get a boundary warning;
   ignore it and you'll take damage. Flying into the ground is instantly
   fatal — respect your altitude.
-- Three lives, full HUD (speed, altitude, heading, radar, throttle, boost
-  fuel, hull integrity, gun heat). High score saved locally via
-  `localStorage` — no account needed.
+- Three lives, full HUD (speed, altitude, heading, G-meter, radar,
+  throttle, boost fuel, hull integrity, gun heat, per-component status).
+  High score saved locally via `localStorage` — no account needed.
 
 ## Deploying
 
