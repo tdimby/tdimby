@@ -1,0 +1,33 @@
+name: Deploy Neon Void to GitHub Pages
+
+on:
+  push:
+    branches: [claude/retro-cool-game-github-6bq7oe]
+    paths: ["neon-void/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-neon-void
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/retro-cool-game-github-6bq7oe
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./neon-void
+      - id: deployment
+        uses: actions/deploy-pages@v4
