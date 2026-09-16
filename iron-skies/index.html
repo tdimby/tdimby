@@ -505,13 +505,16 @@
   /* =========================================================================
      AIRCRAFT MESH (local space: +X right, +Y up, +Z forward/nose)
   ========================================================================= */
+  const MESH_SCALE = 1.9; // bump aircraft visual size well above their gameplay hitbox for readability
+  function sv3(x, y, z) { return v3(x * MESH_SCALE, y * MESH_SCALE, z * MESH_SCALE); }
+
   function buildPlaneMesh(colors) {
-    const nose = v3(0, 0.15, 5.0);
-    const top = v3(0, 1.05, 0.2);
-    const bot = v3(0, -0.55, 0.5);
-    const left = v3(-0.95, 0.15, 0.1);
-    const right = v3(0.95, 0.15, 0.1);
-    const tail = v3(0, 0.35, -4.4);
+    const nose = sv3(0, 0.15, 5.0);
+    const top = sv3(0, 1.05, 0.2);
+    const bot = sv3(0, -0.55, 0.5);
+    const left = sv3(-0.95, 0.15, 0.1);
+    const right = sv3(0.95, 0.15, 0.1);
+    const tail = sv3(0, 0.35, -4.4);
 
     const faces = [
       { v: [nose, top, tail], color: colors.top },
@@ -521,32 +524,32 @@
     ];
 
     // wings (quad each side, split into 2 tris)
-    const wL_rootF = v3(-0.85, 0.1, 0.7), wL_rootB = v3(-0.85, 0.05, -0.7);
-    const wL_tipB = v3(-5.3, -0.05, -1.5), wL_tipF = v3(-4.6, 0, -0.1);
+    const wL_rootF = sv3(-0.85, 0.1, 0.7), wL_rootB = sv3(-0.85, 0.05, -0.7);
+    const wL_tipB = sv3(-5.3, -0.05, -1.5), wL_tipF = sv3(-4.6, 0, -0.1);
     faces.push({ v: [wL_rootF, wL_rootB, wL_tipB], color: colors.wing });
     faces.push({ v: [wL_rootF, wL_tipB, wL_tipF], color: colors.wing });
 
-    const wR_rootF = v3(0.85, 0.1, 0.7), wR_rootB = v3(0.85, 0.05, -0.7);
-    const wR_tipB = v3(5.3, -0.05, -1.5), wR_tipF = v3(4.6, 0, -0.1);
+    const wR_rootF = sv3(0.85, 0.1, 0.7), wR_rootB = sv3(0.85, 0.05, -0.7);
+    const wR_tipB = sv3(5.3, -0.05, -1.5), wR_tipF = sv3(4.6, 0, -0.1);
     faces.push({ v: [wR_rootF, wR_tipB, wR_rootB], color: colors.wing });
     faces.push({ v: [wR_rootF, wR_tipF, wR_tipB], color: colors.wing });
 
     // tail fin
-    faces.push({ v: [v3(0, 0.3, -3.0), v3(0, 0.3, -4.5), v3(0, 2.0, -4.0)], color: colors.fin });
+    faces.push({ v: [sv3(0, 0.3, -3.0), sv3(0, 0.3, -4.5), sv3(0, 2.0, -4.0)], color: colors.fin });
 
     // horizontal stabilizers
-    const hsL_root = v3(-0.15, 0.32, -3.3), hsL_tip = v3(-1.9, 0.22, -4.0), hsL_back = v3(-0.15, 0.32, -4.3);
+    const hsL_root = sv3(-0.15, 0.32, -3.3), hsL_tip = sv3(-1.9, 0.22, -4.0), hsL_back = sv3(-0.15, 0.32, -4.3);
     faces.push({ v: [hsL_root, hsL_tip, hsL_back], color: colors.wing });
-    const hsR_root = v3(0.15, 0.32, -3.3), hsR_tip = v3(1.9, 0.22, -4.0), hsR_back = v3(0.15, 0.32, -4.3);
+    const hsR_root = sv3(0.15, 0.32, -3.3), hsR_tip = sv3(1.9, 0.22, -4.0), hsR_back = sv3(0.15, 0.32, -4.3);
     faces.push({ v: [hsR_root, hsR_back, hsR_tip], color: colors.wing });
 
     // canopy
     faces.push({
-      v: [v3(-0.3, 1.05, 1.1), v3(0.3, 1.05, 1.1), v3(0.22, 1.35, 0.35), v3(-0.22, 1.35, 0.35)],
+      v: [sv3(-0.3, 1.05, 1.1), sv3(0.3, 1.05, 1.1), sv3(0.22, 1.35, 0.35), sv3(-0.22, 1.35, 0.35)],
       color: colors.canopy,
     });
 
-    return { faces, noseLocal: nose, tailLocal: v3(0, 0.2, -4.6) };
+    return { faces, noseLocal: nose, tailLocal: sv3(0, 0.2, -4.6) };
   }
 
   const PLANE_ARCHETYPES = [
@@ -558,7 +561,7 @@
       rollRate: 3.1, pitchRate: 2.35, health: 65,
       fireRate: 10, gunDamage: 5.5, gunRange: 480,
       boostMult: 1.5, boostFuelMax: 3.2, boostDrain: 1.0, boostRegen: 0.5,
-      colors: { top: "#9fb3bd", bottom: "#5b6a72", left: "#7f929c", right: "#7f929c", wing: "#7f929c", fin: "#8b9ca5", canopy: "#2b3d46" },
+      colors: { top: "#eef6fb", bottom: "#3a4b57", left: "#4fa8d8", right: "#4fa8d8", wing: "#dce8ee", fin: "#4fa8d8", canopy: "#12222c" },
     },
     {
       id: "heavy", name: "HEAVY FIGHTER",
@@ -568,7 +571,7 @@
       rollRate: 1.7, pitchRate: 1.3, health: 130,
       fireRate: 6.5, gunDamage: 11, gunRange: 460,
       boostMult: 1.25, boostFuelMax: 2.6, boostDrain: 1.1, boostRegen: 0.45,
-      colors: { top: "#b0aa93", bottom: "#615c4d", left: "#948d76", right: "#948d76", wing: "#948d76", fin: "#a29b83", canopy: "#2b3d46" },
+      colors: { top: "#ffdf8f", bottom: "#6b5228", left: "#e0a23b", right: "#e0a23b", wing: "#f5d99a", fin: "#e0a23b", canopy: "#12222c" },
     },
     {
       id: "balanced", name: "ALL-ROUNDER",
@@ -578,11 +581,11 @@
       rollRate: 2.35, pitchRate: 1.8, health: 95,
       fireRate: 8, gunDamage: 7.5, gunRange: 470,
       boostMult: 1.35, boostFuelMax: 3.0, boostDrain: 1.0, boostRegen: 0.5,
-      colors: { top: "#9db8a8", bottom: "#54695d", left: "#7fa08e", right: "#7fa08e", wing: "#7fa08e", fin: "#8cae9b", canopy: "#2b3d46" },
+      colors: { top: "#c9f7de", bottom: "#2d5443", left: "#3ecf8e", right: "#3ecf8e", wing: "#a9ecc9", fin: "#3ecf8e", canopy: "#12222c" },
     },
   ];
-  const ENEMY_COLORS_GRUNT = { top: "#c17a63", bottom: "#6b392c", left: "#a3604a", right: "#a3604a", wing: "#a3604a", fin: "#b06f57", canopy: "#241211" };
-  const ENEMY_COLORS_ACE = { top: "#8f2f2f", bottom: "#4a1414", left: "#6f2020", right: "#6f2020", wing: "#6f2020", fin: "#7d2626", canopy: "#1c0a0a" };
+  const ENEMY_COLORS_GRUNT = { top: "#ff8a4c", bottom: "#7a3312", left: "#e8621f", right: "#e8621f", wing: "#ff9e5c", fin: "#e8621f", canopy: "#1c0a0a" };
+  const ENEMY_COLORS_ACE = { top: "#ff4b4b", bottom: "#5c0f0f", left: "#c41c1c", right: "#c41c1c", wing: "#ff6a6a", fin: "#c41c1c", canopy: "#0f0505" };
 
   let selectedArchetypeIdx = 2;
 
@@ -1007,6 +1010,8 @@
     ac.speed = clamp(ac.speed, 20, a.maxSpeed * (ac.boosting ? a.boostMult : 1) + 10);
 
     ac.stalling = ac.speed < a.stallSpeed;
+    if (ac.stalling && !ac.wasStalling && ac.isPlayer) sfxStall();
+    ac.wasStalling = ac.stalling;
     const authority = ac.stalling ? 0.35 : 1;
     let effPitch = pitchIn * a.pitchRate * authority;
     if (ac.stalling) effPitch += 0.7; // forced nose-drop
@@ -1020,7 +1025,7 @@
   function fireGun(ac) {
     sfxGun();
     const dmg = ac.archetype.gunDamage;
-    const muzzle = vAdd(ac.pos, vScale(ac.basis.forward, 5.2));
+    const muzzle = vAdd(ac.pos, vScale(ac.basis.forward, 5.2 * MESH_SCALE));
     const spread = ac.isPlayer ? 0.004 : 0.02;
     const dir = vNorm(vAdd(ac.basis.forward, v3(rand(-spread, spread), rand(-spread, spread), rand(-spread, spread))));
     bullets.push({
@@ -1102,10 +1107,10 @@
       if (b.isPlayer) {
         for (const e of enemies) {
           if (!e.alive) continue;
-          if (vLen2(vSub(e.pos, b.pos)) < 6 * 6) { damageAircraft(e, b.dmg, true); hit = true; sfxHit(); break; }
+          if (vLen2(vSub(e.pos, b.pos)) < (6 * MESH_SCALE) * (6 * MESH_SCALE)) { damageAircraft(e, b.dmg, true); hit = true; sfxHit(); break; }
         }
       } else if (player.alive) {
-        if (vLen2(vSub(player.pos, b.pos)) < 5.5 * 5.5) { damageAircraft(player, b.dmg, false); hit = true; }
+        if (vLen2(vSub(player.pos, b.pos)) < (5.5 * MESH_SCALE) * (5.5 * MESH_SCALE)) { damageAircraft(player, b.dmg, false); hit = true; }
       }
       if (hit) bullets.splice(i, 1);
     }
@@ -1160,10 +1165,19 @@
   let menuAngle = 0;
 
   function updateCameraChase(dt) {
-    const desiredPos = vAdd(vSub(player.pos, vScale(player.basis.forward, 22)), vScale(player.basis.up, 6));
+    const desiredPos = vAdd(vSub(player.pos, vScale(player.basis.forward, 20)), vScale(player.basis.up, 5.5));
     cam.pos = vLerp(cam.pos, desiredPos, smooth(dt, 7));
-    const desiredBasis = player.basis;
-    cam.basis = basisLerp(cam.basis, desiredBasis, smooth(dt, 8));
+
+    // damp camera roll so the horizon stays readable during hard banks —
+    // the camera leans into turns but doesn't spin all the way with the plane
+    const worldUp = v3(0, 1, 0);
+    const rollFollow = 0.45;
+    const dampedUp = vNorm(vLerp(worldUp, player.basis.up, rollFollow));
+    const forward = player.basis.forward;
+    const right = vNorm(vCross(dampedUp, forward));
+    const up = vNorm(vCross(forward, right));
+    const desiredBasis = { forward, up, right };
+    cam.basis = basisLerp(cam.basis, desiredBasis, smooth(dt, 9));
   }
 
   function updateCameraMenu(dt) {
@@ -1328,14 +1342,17 @@
             for (let i = 1; i < proj.length; i++) ctx.lineTo(proj[i].x, proj[i].y);
             ctx.closePath();
             ctx.fill();
+            ctx.strokeStyle = "rgba(8,8,10,0.6)";
+            ctx.lineWidth = 1;
+            ctx.stroke();
           },
         });
       }
       // prop blur billboard
-      const noseWorld = vAdd(ac.pos, vScale(ac.basis.forward, 5.0));
+      const noseWorld = vAdd(ac.pos, vScale(ac.basis.forward, 5.0 * MESH_SCALE));
       const pn = project(noseWorld, cam.pos, cam.basis);
       if (pn) {
-        const s = (1.1 * FOCAL) / pn.depth;
+        const s = (1.1 * MESH_SCALE * FOCAL) / pn.depth;
         queue.push({
           depth: pn.depth - 0.01,
           draw: () => {
