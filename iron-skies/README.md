@@ -51,6 +51,12 @@ on phones and tablets.
   a red bracket locks onto it with its range, plus a separate amber pipper
   showing exactly where to put your reticle to actually hit it — the same
   idea as a real (or War Thunder-arcade) lead-computing gunsight.
+- **An off-screen arrow tracks whoever's closest.** Your view is a
+  realistic ~62°, so a hard-turning dogfight routinely pushes the target
+  out of frame — without a way to know which way they went, you can't
+  keep pulling toward them. An amber (red for aces) arrow sits at the
+  edge of the screen pointing at the nearest enemy with their range,
+  whenever they're not already visible.
 - Fly with a simplified energy model: **diving builds speed, climbing
   bleeds it**. Let your speed drop too low and you'll stall — the nose
   drops and controls go mushy until you dive to recover.

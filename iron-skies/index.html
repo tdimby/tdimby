@@ -1688,6 +1688,53 @@
     }
   }
 
+  // in a hard turn the target you're fighting routinely leaves the ~62-degree FOV — without
+  // this there is no way to know which way to keep pulling once you lose sight of them
+  function drawOffscreenIndicator() {
+    if (!player.alive) return;
+    let target = null, bestDist = Infinity;
+    for (const e of enemies) {
+      if (!e.alive) continue;
+      const d = vLen(vSub(e.pos, player.pos));
+      if (d < bestDist) { bestDist = d; target = e; }
+    }
+    if (!target || bestDist > 1600) return;
+
+    const cxr = RW / 2, cyr = RH / 2;
+    const margin = 16;
+    const proj = project(target.pos, cam.pos, cam.basis);
+    const onScreen = proj && proj.x > margin && proj.x < RW - margin && proj.y > margin && proj.y < RH - margin;
+    if (onScreen) return;
+
+    const rel = vSub(target.pos, player.pos);
+    const lx = vDot(rel, cam.basis.right);
+    const ly = vDot(rel, cam.basis.up);
+    const mag = Math.hypot(lx, ly) || 1;
+    const dx = lx / mag, dy = -ly / mag;
+    const halfW = RW / 2 - margin, halfH = RH / 2 - margin;
+    const t = Math.min(dx !== 0 ? halfW / Math.abs(dx) : Infinity, dy !== 0 ? halfH / Math.abs(dy) : Infinity);
+    const ax = cxr + dx * t;
+    const ay = Math.max(cyr + dy * t, 26); // keep clear of the DOM mute button up top
+    const color = target.tier === "ace" ? "#ff4b3e" : "#ffb100";
+
+    ctx.save();
+    ctx.translate(ax, ay);
+    ctx.rotate(Math.atan2(dy, dx) + Math.PI / 2);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(0, -7); ctx.lineTo(5, 5); ctx.lineTo(-5, 5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    ctx.fillStyle = color;
+    ctx.font = "6px monospace";
+    const label = Math.round(bestDist) + "m";
+    const tw = ctx.measureText(label).width;
+    ctx.fillText(label, ax - tw / 2, ay + (dy > 0 ? 8 : -14));
+    ctx.font = "8px monospace";
+  }
+
   function drawHudCanvas() {
     if (state !== "playing" && state !== "paused") return;
     ctx.font = "8px monospace";
@@ -1720,6 +1767,7 @@
     ctx.fill();
 
     drawLeadIndicator();
+    drawOffscreenIndicator();
 
     // speed / altitude (top row of the bottom HUD block)
     ctx.fillStyle = "#3dffa0";
