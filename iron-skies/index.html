@@ -1107,16 +1107,16 @@
     ac.wasStalling = ac.stalling;
 
     const stallAuthority = ac.stalling ? 0.35 : 1;
-    const gAuthority = ac.currentG > 7 ? clamp(1 - (ac.currentG - 7) * 0.08, 0.35, 1) : 1;
 
-    let effPitch = pitchIn * a.pitchRate * tailFactor * stallAuthority * gAuthority * (wingLost ? 0.5 : 1);
+    let effPitch = pitchIn * a.pitchRate * tailFactor * stallAuthority * (wingLost ? 0.5 : 1);
     if (ac.stalling) effPitch += 0.7 * stallAuthority;
     if (wingLost) effPitch += 0.5; // lost lift on one side noses the plane down too
-    const effRoll = rollIn * a.rollRate * gAuthority * wingAuthority + wingBias;
+    const effRoll = rollIn * a.rollRate * wingAuthority + wingBias;
     const effYaw = rollIn * a.rollRate * 0.3 * tailFactor * wingAuthority;
 
-    // angular inertia: control surfaces accelerate the plane's rotation, they don't snap it
-    const k = 1 - Math.exp(-5.5 * dt);
+    // angular inertia: control surfaces accelerate the plane's rotation, they don't snap it —
+    // kept snappy (short ramp-up) so it reads as "weight", not "lag"
+    const k = 1 - Math.exp(-8 * dt);
     ac.angVel.pitch = lerp(ac.angVel.pitch, effPitch, k);
     ac.angVel.roll = lerp(ac.angVel.roll, effRoll, k);
     ac.angVel.yaw = lerp(ac.angVel.yaw, effYaw, k);
@@ -1629,6 +1629,62 @@
     }
   }
 
+  const BULLET_SPEED = 900;
+
+  // finds the best target ahead of the player and returns both its screen position and
+  // a predicted "lead" point — where its bullets need to be aimed to actually hit a moving target
+  function computeLeadTarget() {
+    if (!player.alive) return null;
+    let best = null, bestScore = 0.82; // ~35 degree cone in front of the nose
+    for (const e of enemies) {
+      if (!e.alive) continue;
+      const rel = vSub(e.pos, player.pos);
+      const dist = vLen(rel);
+      if (dist > 950 || dist < 1) continue;
+      const facing = vDot(player.basis.forward, vScale(rel, 1 / dist));
+      if (facing > bestScore) { bestScore = facing; best = e; }
+    }
+    if (!best) return null;
+
+    const enemyVel = vScale(best.basis.forward, best.speed);
+    let predicted = best.pos;
+    for (let i = 0; i < 3; i++) {
+      const t = vLen(vSub(predicted, player.pos)) / BULLET_SPEED;
+      predicted = vAdd(best.pos, vScale(enemyVel, t));
+    }
+    return { enemy: best, predicted, dist: vLen(vSub(best.pos, player.pos)) };
+  }
+
+  function drawLeadIndicator() {
+    const lead = computeLeadTarget();
+    if (!lead) return;
+    const targetProj = project(lead.enemy.pos, cam.pos, cam.basis);
+    if (targetProj) {
+      ctx.strokeStyle = "rgba(255,75,62,0.9)";
+      ctx.lineWidth = 1;
+      const s = 6;
+      ctx.strokeRect(targetProj.x - s, targetProj.y - s, s * 2, s * 2);
+      ctx.fillStyle = "#ff4b3e";
+      ctx.font = "7px monospace";
+      ctx.fillText(Math.round(lead.dist) + "m", targetProj.x + s + 2, targetProj.y - s);
+      ctx.font = "8px monospace";
+    }
+    const leadProj = project(lead.predicted, cam.pos, cam.basis);
+    if (leadProj) {
+      ctx.strokeStyle = "#ffe14b";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(leadProj.x, leadProj.y, 4, 0, TAU);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(leadProj.x - 7, leadProj.y); ctx.lineTo(leadProj.x - 3, leadProj.y);
+      ctx.moveTo(leadProj.x + 3, leadProj.y); ctx.lineTo(leadProj.x + 7, leadProj.y);
+      ctx.moveTo(leadProj.x, leadProj.y - 7); ctx.lineTo(leadProj.x, leadProj.y - 3);
+      ctx.moveTo(leadProj.x, leadProj.y + 3); ctx.lineTo(leadProj.x, leadProj.y + 7);
+      ctx.stroke();
+    }
+  }
+
   function drawHudCanvas() {
     if (state !== "playing" && state !== "paused") return;
     ctx.font = "8px monospace";
@@ -1660,6 +1716,8 @@
     ctx.fillStyle = "rgba(61,255,160,0.9)";
     ctx.fill();
 
+    drawLeadIndicator();
+
     // speed / altitude (top row of the bottom HUD block)
     ctx.fillStyle = "#3dffa0";
     ctx.fillText("SPD " + Math.round(player.speed), 8, RH - 48);
@@ -1677,12 +1735,16 @@
       ctx.font = "8px monospace";
     }
 
-    // throttle + boost (label row, then bar row)
+    // throttle + boost (label row, then bar row, then a key hint so Q/E don't get forgotten)
     ctx.fillStyle = "#3dffa0";
     ctx.fillText("THR", 8, RH - 34);
     drawBar(8, RH - 24, 46, 5, player.throttle, "#3dffa0");
     ctx.fillText("BST", 60, RH - 34);
     drawBar(60, RH - 24, 34, 5, player.boostFuel / player.archetype.boostFuelMax, "#ffb100");
+    ctx.font = "6px monospace";
+    ctx.fillStyle = "#8fd9b6";
+    ctx.fillText("Q◂ THR ▸E", 8, RH - 14);
+    ctx.font = "8px monospace";
 
     // health
     drawBar(8, 8, 70, 6, player.health / player.maxHealth, player.health / player.maxHealth < 0.3 ? "#ff4b3e" : "#3dffa0");
