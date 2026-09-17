@@ -1180,6 +1180,12 @@
 
     const totalAccel = vAdd(vAdd(thrust, gravity), vAdd(drag, lift));
     ac.velocity = vAdd(ac.velocity, vScale(totalAccel, dt));
+    // a steep enough dive can otherwise push well past the archetype's top speed — drag alone has
+    // to fight both thrust and gravity, and terminal dive speed lands noticeably above level-flight
+    // max. Diving faster than you can fly level is the point; runaway overspeed isn't.
+    const capSpeed = a.maxSpeed * (ac.boosting && !comp.engine.destroyed ? a.boostMult : 1.15);
+    const rawSpeed = vLen(ac.velocity);
+    if (rawSpeed > capSpeed) ac.velocity = vScale(ac.velocity, capSpeed / rawSpeed);
     ac.speed = vLen(ac.velocity);
     ac.pos = vAdd(ac.pos, vScale(ac.velocity, dt));
 
@@ -1254,11 +1260,33 @@
       desired = ac.basis.forward;
     }
 
+    // AoA-aware nose limiter, mirroring the player's aoaLimiter: turnToward snaps the
+    // nose straight at the (possibly steep) intercept point with no regard for the
+    // actual velocity vector, so a hard pursuit can command an implied AoA well past
+    // stall, repeatedly stalling the AI and bleeding energy it never recovers. Cap how
+    // far the commanded nose can diverge from the flight path so the AI never asks for
+    // more angle-of-attack than it can actually hold.
+    if (!ac.doomed) {
+      const speed0 = vLen(ac.velocity);
+      const velDir0 = speed0 > 1 ? vScale(ac.velocity, 1 / speed0) : ac.basis.forward;
+      const desiredNorm = vNorm(desired);
+      const cosToVel = clamp(vDot(desiredNorm, velDir0), -1, 1);
+      const angToVel = Math.acos(cosToVel);
+      const maxDesiredAngle = (STALL_ANGLE * 0.85) * Math.PI / 180;
+      if (angToVel > maxDesiredAngle) {
+        const t = maxDesiredAngle / angToVel;
+        desired = vNorm(vLerp(velDir0, desiredNorm, t));
+      }
+    }
+
     const maxTurn = ac.archetype.rollRate * 0.85 * tailFactor * wingAuthority * dt;
     ac.basis = turnToward(ac.basis, desired, maxTurn);
 
-    // throttle heuristic: push harder when closing for a shot
-    ac.throttle = clamp((dist < 500 ? 1 : 0.85) * (ac.aggro || 1), 0.3, 1);
+    // throttle heuristic: push harder when closing for a shot, and firewall it during
+    // a low-altitude climb-out — without full power there often isn't enough thrust to
+    // out-climb gravity, and a plane easing off the throttle while trying to escape the
+    // ground just stalls and augers in instead of recovering
+    ac.throttle = ac.pos.y < 140 ? 1 : clamp((dist < 500 ? 0.85 : 0.65) * (ac.aggro || 1), 0.3, 0.95);
 
     // same force model as the player: gravity, thrust, drag and AoA-dependent lift acting on
     // a real velocity vector, so the AI is subject to the same stall risk and energy management
@@ -1282,6 +1310,9 @@
 
     const totalAccel = vAdd(vAdd(thrust, gravity), vAdd(drag, lift));
     ac.velocity = vAdd(ac.velocity, vScale(totalAccel, dt));
+    const capSpeed = a.maxSpeed * 1.15; // same dive-overspeed cap as the player
+    const rawSpeed = vLen(ac.velocity);
+    if (rawSpeed > capSpeed) ac.velocity = vScale(ac.velocity, capSpeed / rawSpeed);
     ac.speed = vLen(ac.velocity);
     ac.pos = vAdd(ac.pos, vScale(ac.velocity, dt));
     ac.currentG = Math.max(0, liftAccel / GRAVITY);

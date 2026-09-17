@@ -87,6 +87,12 @@ on phones and tablets.
   can catch fire and burn until they're destroyed (or, rarely, burn out on
   their own), and destroyed wings/tail sections visibly disappear from the
   aircraft.
+- **Enemy fighters fly with the same energy limits you do.** They chase and
+  intercept using the real force model too, with their own angle-of-attack
+  guardrail so a hard pursuit doesn't repeatedly snap their nose past the
+  stall angle and bleed off speed and altitude they can't get back — expect
+  them to hold a sane cruise and actually close the distance, not clump
+  together losing airspeed.
 - Guns overheat with sustained fire — watch the heat gauge.
 - Waves of enemy fighters escalate in number and skill (grunts, then
   tougher "aces" mixed in), and take the same component damage you do —
