@@ -45,6 +45,10 @@ on phones and tablets.
   rather than feel delayed. Bank *and* pull together (a real coordinated
   turn) rather than just pulling straight back — pure pitch with no bank
   barely turns you at all, same as a real aircraft.
+- **The chase camera shows your real bank angle.** It lags a little on
+  quick inputs so a snap-roll doesn't spin the world, but on a sustained
+  turn it fully catches up to how banked you actually are — you need to
+  see that to judge and hold a proper turn.
 - **A lead indicator does the hard part of aiming for you.** Your bullets
   take time to arrive, so shooting straight at a moving target usually
   misses. Get a plane within roughly 35° of your nose and inside ~950m and

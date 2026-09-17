@@ -1319,16 +1319,11 @@
     const desiredPos = vAdd(vSub(player.pos, vScale(player.basis.forward, 20)), vScale(player.basis.up, 5.5));
     cam.pos = vLerp(cam.pos, desiredPos, smooth(dt, 7));
 
-    // damp camera roll so the horizon stays readable during hard banks —
-    // the camera leans into turns but doesn't spin all the way with the plane
-    const worldUp = v3(0, 1, 0);
-    const rollFollow = 0.45;
-    const dampedUp = vNorm(vLerp(worldUp, player.basis.up, rollFollow));
-    const forward = player.basis.forward;
-    const right = vNorm(vCross(dampedUp, forward));
-    const up = vNorm(vCross(forward, right));
-    const desiredBasis = { forward, up, right };
-    cam.basis = basisLerp(cam.basis, desiredBasis, smooth(dt, 9));
+    // the camera lags into a bank rather than snapping to it (avoids the jarring instant-spin
+    // that full 1:1 tracking caused), but it must fully catch up on a sustained turn — a camera
+    // that never shows your true bank angle makes it impossible to judge how hard you're
+    // actually turning, which is fatal for flying a real coordinated turn
+    cam.basis = basisLerp(cam.basis, player.basis, smooth(dt, 4));
   }
 
   function updateCameraMenu(dt) {
