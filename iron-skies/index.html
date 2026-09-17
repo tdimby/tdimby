@@ -689,6 +689,7 @@
       basis: makeBasis(),
       angVel: { pitch: 0, roll: 0, yaw: 0 },
       currentG: 1,
+      velocity: v3(0, 0, archetype.cruiseSpeed),
       speed: archetype.cruiseSpeed,
       throttle: 0.75,
       boostFuel: archetype.boostFuelMax,
@@ -740,6 +741,7 @@
         maxSpeed: isAce ? 360 : 300,
         cruiseSpeed: isAce ? 280 : 230,
         stallSpeed: 100,
+        accel: isAce ? 150 : 120,
         rollRate: isAce ? 1.3 : 0.95,
         pitchRate: isAce ? 0.9 : 0.65,
         health: isAce ? 90 : 55,
@@ -753,6 +755,7 @@
       enemy.pos = v3(Math.cos(a) * r, alt, Math.sin(a) * r);
       const toCenter = vNorm(vSub(v3(0, alt, 0), enemy.pos));
       enemy.basis = turnToward(makeBasis(), toCenter, Math.PI);
+      enemy.velocity = vScale(enemy.basis.forward, arch.cruiseSpeed);
       enemy.speed = arch.cruiseSpeed;
       enemy.throttle = 0.7;
       enemy.tier = isAce ? "ace" : "grunt";
@@ -855,6 +858,7 @@
         player.angVel = { pitch: 0, roll: 0, yaw: 0 };
         player.pos = v3(rand(-200, 200), 450, rand(-200, 200));
         player.basis = makeBasis();
+        player.velocity = v3(0, 0, player.archetype.cruiseSpeed);
         player.speed = player.archetype.cruiseSpeed;
         player.invuln = 2.5;
       }, 1200);
@@ -1027,8 +1031,32 @@
 
   /* =========================================================================
      FLIGHT UPDATE
+
+     Translational motion is a real (simplified) force model: gravity, thrust,
+     drag and lift all act on an independent velocity vector — the plane's
+     nose orientation (steered by pitch/roll/yaw as before) no longer directly
+     sets where the aircraft goes. Lift depends on angle of attack (the angle
+     between the nose and the actual direction of travel) and collapses past
+     a stall angle, so a stalled aircraft genuinely falls under gravity even
+     while its nose points somewhere else entirely — that divergence between
+     "where the nose points" and "where the plane is actually going" is the
+     whole sensation a stall is supposed to have, and the previous model
+     (velocity locked to nose direction at all times) could never produce it.
   ========================================================================= */
-  const G_DIVISOR = 46; // tuned so a hard sustained turn at cruise speed reads as ~5-7G
+  const GRAVITY = 46;
+  const STALL_ANGLE = 18; // degrees of angle-of-attack before lift collapses
+
+  // lift coefficient as a function of (signed) angle of attack: a baseline at zero AoA
+  // (cambered-wing simplification), rising toward a peak at the stall angle, then collapsing
+  function liftCoefficient(aoaDeg) {
+    const base = 0.35;
+    const slope = (1 - base) / STALL_ANGLE;
+    if (aoaDeg >= 0) {
+      if (aoaDeg <= STALL_ANGLE) return base + slope * aoaDeg;
+      return Math.max(0.05, 1 - (aoaDeg - STALL_ANGLE) * 0.07);
+    }
+    return Math.max(-0.3, base + slope * aoaDeg * 1.3);
+  }
 
   // sustained extreme G risks tearing a wing off — the natural check on yanking the stick at speed
   function applyGStressRisk(ac, dt) {
@@ -1088,53 +1116,84 @@
     const tailFactor = comp.tail.destroyed ? 0.2 : (0.3 + 0.7 * comp.tail.health / comp.tail.max);
     const wingLost = comp.wingL.destroyed || comp.wingR.destroyed;
     const wingAuthority = wingLost ? 0.15 : clamp((wingLFactor + wingRFactor) / 2, 0.3, 1);
+    const wingLiftFactor = wingLost ? 0.35 : clamp((wingLFactor + wingRFactor) / 2, 0.25, 1);
     // asymmetric wing damage rolls the plane toward the weaker side on its own — this is an
     // aerodynamic effect, not a control input, so it isn't crushed by the same authority loss
     // that limits how hard the player can fight it (that asymmetry is the point: it's why a
     // lost wing is catastrophic rather than just "stiffer controls")
     const wingBias = wingLost ? (comp.wingR.destroyed ? 1.8 : -1.8) : (wingLFactor - wingRFactor) * 1.6;
 
-    const targetSpeed = lerp(a.stallSpeed * 0.85, a.maxSpeed, ac.throttle) * engineFactor;
-    let speedGoal = targetSpeed;
-    if (ac.boosting && !comp.engine.destroyed) speedGoal = a.maxSpeed * a.boostMult * engineFactor;
-    ac.speed = lerp(ac.speed, speedGoal, 1 - Math.exp(-((ac.boosting ? 2.2 : 1) * a.accel / 200) * dt));
+    // keyboard pitch input is on/off, not analog — a real pilot flying a max-performance turn
+    // holds the stick right at the edge of the stall, easing off exactly as much as needed, which
+    // isn't physically possible with a digital key. Without this, holding full pitch always blows
+    // straight through the stall angle; this softens pitch authority as AoA approaches the stall
+    // (only while still pulling further into it — pushing to recover stays fully effective) so a
+    // held input settles into a sustained near-max turn instead of an instant, unrecoverable stall
+    const speed0 = vLen(ac.velocity);
+    const velDir0 = speed0 > 1 ? vScale(ac.velocity, 1 / speed0) : ac.basis.forward;
+    const curAoADeg = -Math.atan2(vDot(velDir0, ac.basis.up), vDot(velDir0, ac.basis.forward)) * 180 / Math.PI;
+    const pullingIntoStall = pitchIn < -0.01 && curAoADeg > 0;
+    const aoaLimiter = pullingIntoStall
+      ? clamp(1 - Math.max(0, curAoADeg - STALL_ANGLE * 0.7) / (STALL_ANGLE * 0.5), 0.1, 1)
+      : 1;
 
-    // energy trade: diving builds speed, climbing bleeds it
-    ac.speed += -ac.basis.forward.y * 55 * dt;
-
-    ac.stalling = ac.speed < a.stallSpeed;
-    if (ac.stalling && !ac.wasStalling && ac.isPlayer) sfxStall();
-    ac.wasStalling = ac.stalling;
-
-    const stallAuthority = ac.stalling ? 0.35 : 1;
-
-    let effPitch = pitchIn * a.pitchRate * tailFactor * stallAuthority * (wingLost ? 0.5 : 1);
-    if (ac.stalling) effPitch += 0.7 * stallAuthority;
-    if (wingLost) effPitch += 0.5; // lost lift on one side noses the plane down too
+    // --- nose orientation: pitch/roll/yaw with inertia, same as before ---
+    const stallAuthority = ac.stalling ? 0.7 : 1;
+    let effPitch = pitchIn * a.pitchRate * tailFactor * stallAuthority * aoaLimiter * (wingLost ? 0.6 : 1);
     const effRoll = rollIn * a.rollRate * wingAuthority + wingBias;
-    // coordinated turn: banking alone doesn't curve the flight path (only pitch/yaw do) — this
-    // converts a good chunk of roll input directly into actual turning, so "bank and pull" reads
-    // as one coordinated turn instead of a corkscrew, matching how the AI's pursuit steers
-    const effYaw = rollIn * a.rollRate * 0.65 * tailFactor * wingAuthority;
+    // rudder coordination: pitching while banked at anything other than exactly level or exactly
+    // knife-edge rotates around a tilted axis, which on its own bleeds pitch into bank drift — a
+    // real pilot continuously corrects this with small rudder inputs to hold a clean turn. This
+    // is the textbook formula for a coordinated turn's yaw rate (g·tan(bank)/speed) rather than
+    // a rate tied to roll input, so it holds whatever bank the pilot is currently at, actively
+    // rolling or not.
+    const bankSin = clamp(-vDot(ac.basis.right, v3(0, 1, 0)), -1, 1);
+    const coordYaw = clamp((GRAVITY * bankSin) / Math.max(ac.speed, 60), -2.2, 2.2) * tailFactor * wingAuthority;
+    const effYaw = coordYaw;
 
-    // angular inertia: control surfaces accelerate the plane's rotation, they don't snap it —
-    // kept snappy (short ramp-up) so it reads as "weight", not "lag"
     const k = 1 - Math.exp(-8 * dt);
     ac.angVel.pitch = lerp(ac.angVel.pitch, effPitch, k);
     ac.angVel.roll = lerp(ac.angVel.roll, effRoll, k);
     ac.angVel.yaw = lerp(ac.angVel.yaw, effYaw, k);
-
-    // G-force from the resulting turn rate, plus its consequences
-    ac.currentG = 1 + (ac.speed * Math.hypot(ac.angVel.pitch, ac.angVel.yaw)) / G_DIVISOR;
-    applyGStressRisk(ac, dt);
-    ac.speed -= (ac.currentG - 1) * 6 * dt; // induced drag: hard turns cost energy
-    ac.speed = clamp(ac.speed, 20, a.maxSpeed * (ac.boosting ? a.boostMult : 1) + 10);
-
     ac.basis = applyRotation(ac.basis, ac.angVel.pitch * dt, ac.angVel.roll * dt, ac.angVel.yaw * dt);
-    ac.pos = vAdd(ac.pos, vScale(ac.basis.forward, ac.speed * dt));
-    // a broken airframe can't hold altitude no matter how the fight against it goes —
-    // the chaos above sells the loss of control, this guarantees it's not survivable forever
-    if (wingLost) ac.pos.y -= 28 * dt;
+
+    // --- translation: real forces acting on an independent velocity vector ---
+    const speed = vLen(ac.velocity);
+    const velDir = speed > 1 ? vScale(ac.velocity, 1 / speed) : ac.basis.forward;
+
+    const thrustAccelFull = a.accel * 0.55;
+    const boostMult = ac.boosting && !comp.engine.destroyed ? a.boostMult : 1;
+    const thrust = vScale(ac.basis.forward, thrustAccelFull * ac.throttle * engineFactor * boostMult);
+    const gravity = v3(0, -GRAVITY, 0);
+
+    // signed angle of attack: positive when the nose is above the actual flight path
+    const signedAoARad = -Math.atan2(vDot(velDir, ac.basis.up), vDot(velDir, ac.basis.forward));
+    const aoaDeg = signedAoARad * 180 / Math.PI;
+    const liftFactor = liftCoefficient(aoaDeg);
+    const liftScale = GRAVITY / (0.35 * a.cruiseSpeed * a.cruiseSpeed);
+    const liftAccel = liftScale * liftFactor * wingLiftFactor * speed * speed;
+    const lift = vScale(ac.basis.up, liftAccel);
+
+    const dragCoef = thrustAccelFull / a.maxSpeed;
+    const inducedDrag = 0.05 * Math.abs(liftAccel); // generating lift for a hard turn costs energy too
+    const drag = vScale(velDir, -(dragCoef * speed + inducedDrag));
+
+    const totalAccel = vAdd(vAdd(thrust, gravity), vAdd(drag, lift));
+    ac.velocity = vAdd(ac.velocity, vScale(totalAccel, dt));
+    ac.speed = vLen(ac.velocity);
+    ac.pos = vAdd(ac.pos, vScale(ac.velocity, dt));
+
+    ac.stalling = aoaDeg > STALL_ANGLE || aoaDeg < -STALL_ANGLE * 1.4;
+    if (ac.stalling && !ac.wasStalling && ac.isPlayer) sfxStall();
+    ac.wasStalling = ac.stalling;
+
+    ac.currentG = Math.max(0, liftAccel / GRAVITY);
+    applyGStressRisk(ac, dt);
+
+    // a broken airframe can't hold altitude no matter how the fight against it goes — lift loss
+    // above already makes this a losing fight, this small extra sink just guarantees it isn't
+    // survivable forever by sitting at the controls doing nothing
+    if (wingLost) ac.pos.y -= 10 * dt;
   }
 
   function fireGun(ac) {
@@ -1170,11 +1229,14 @@
     ac.aiTimer -= dt;
 
     const comp = ac.components;
+    const a = ac.archetype;
     const engineFactor = comp.engine.destroyed ? 0.15 : (0.4 + 0.6 * comp.engine.health / comp.engine.max);
     const wingLFactor = comp.wingL.destroyed ? 0 : comp.wingL.health / comp.wingL.max;
     const wingRFactor = comp.wingR.destroyed ? 0 : comp.wingR.health / comp.wingR.max;
     const tailFactor = comp.tail.destroyed ? 0.2 : (0.3 + 0.7 * comp.tail.health / comp.tail.max);
-    const wingAuthority = (comp.wingL.destroyed || comp.wingR.destroyed) ? 0.1 : clamp((wingLFactor + wingRFactor) / 2, 0.3, 1);
+    const wingLost = comp.wingL.destroyed || comp.wingR.destroyed;
+    const wingAuthority = wingLost ? 0.1 : clamp((wingLFactor + wingRFactor) / 2, 0.3, 1);
+    const wingLiftFactor = wingLost ? 0.35 : clamp((wingLFactor + wingRFactor) / 2, 0.25, 1);
 
     const toPlayer = vSub(player.pos, ac.pos);
     const dist = vLen(toPlayer);
@@ -1186,7 +1248,7 @@
     } else if (ac.pos.y < 140) {
       desired = v3(ac.basis.forward.x, 0.6, ac.basis.forward.z);
     } else if (dist > 30) {
-      const predictedPlayerPos = vAdd(player.pos, vScale(player.basis.forward, player.speed * 0.35));
+      const predictedPlayerPos = vAdd(player.pos, vScale(player.velocity, 0.35));
       desired = vSub(predictedPlayerPos, ac.pos);
     } else {
       desired = ac.basis.forward;
@@ -1195,12 +1257,37 @@
     const maxTurn = ac.archetype.rollRate * 0.85 * tailFactor * wingAuthority * dt;
     ac.basis = turnToward(ac.basis, desired, maxTurn);
 
-    const targetSpeed = ac.archetype.cruiseSpeed * (dist < 500 ? 1.15 : 1) * (ac.aggro || 1) * engineFactor;
-    ac.speed = lerp(ac.speed, clamp(targetSpeed, ac.archetype.stallSpeed * 1.1, ac.archetype.maxSpeed), 1 - Math.exp(-1.2 * dt));
-    ac.speed += -ac.basis.forward.y * 40 * dt;
-    ac.speed = clamp(ac.speed, ac.archetype.stallSpeed, ac.archetype.maxSpeed * 1.05);
-    ac.pos = vAdd(ac.pos, vScale(ac.basis.forward, ac.speed * dt));
-    if (ac.doomed) ac.pos.y -= 28 * dt;
+    // throttle heuristic: push harder when closing for a shot
+    ac.throttle = clamp((dist < 500 ? 1 : 0.85) * (ac.aggro || 1), 0.3, 1);
+
+    // same force model as the player: gravity, thrust, drag and AoA-dependent lift acting on
+    // a real velocity vector, so the AI is subject to the same stall risk and energy management
+    const speed = vLen(ac.velocity);
+    const velDir = speed > 1 ? vScale(ac.velocity, 1 / speed) : ac.basis.forward;
+
+    const thrustAccelFull = a.accel * 0.55;
+    const thrust = vScale(ac.basis.forward, thrustAccelFull * ac.throttle * engineFactor);
+    const gravity = v3(0, -GRAVITY, 0);
+
+    const signedAoARad = -Math.atan2(vDot(velDir, ac.basis.up), vDot(velDir, ac.basis.forward));
+    const aoaDeg = signedAoARad * 180 / Math.PI;
+    const liftFactor = liftCoefficient(aoaDeg);
+    const liftScale = GRAVITY / (0.35 * a.cruiseSpeed * a.cruiseSpeed);
+    const liftAccel = liftScale * liftFactor * wingLiftFactor * speed * speed;
+    const lift = vScale(ac.basis.up, liftAccel);
+
+    const dragCoef = thrustAccelFull / a.maxSpeed;
+    const inducedDrag = 0.05 * Math.abs(liftAccel);
+    const drag = vScale(velDir, -(dragCoef * speed + inducedDrag));
+
+    const totalAccel = vAdd(vAdd(thrust, gravity), vAdd(drag, lift));
+    ac.velocity = vAdd(ac.velocity, vScale(totalAccel, dt));
+    ac.speed = vLen(ac.velocity);
+    ac.pos = vAdd(ac.pos, vScale(ac.velocity, dt));
+    ac.currentG = Math.max(0, liftAccel / GRAVITY);
+    ac.stalling = aoaDeg > STALL_ANGLE || aoaDeg < -STALL_ANGLE * 1.4;
+
+    if (wingLost) ac.pos.y -= 10 * dt;
 
     ac.fireCooldown -= dt;
     if (!ac.doomed && player.alive && dist < ac.archetype.gunRange && dist > 25) {
@@ -1644,7 +1731,7 @@
     }
     if (!best) return null;
 
-    const enemyVel = vScale(best.basis.forward, best.speed);
+    const enemyVel = best.velocity;
     let predicted = best.pos;
     for (let i = 0; i < 3; i++) {
       const t = vLen(vSub(predicted, player.pos)) / BULLET_SPEED;

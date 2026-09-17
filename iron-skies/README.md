@@ -61,14 +61,23 @@ on phones and tablets.
   keep pulling toward them. An amber (red for aces) arrow sits at the
   edge of the screen pointing at the nearest enemy with their range,
   whenever they're not already visible.
-- Fly with a simplified energy model: **diving builds speed, climbing
-  bleeds it**. Let your speed drop too low and you'll stall — the nose
-  drops and controls go mushy until you dive to recover.
-- **G-force is real and has consequences.** Hard turns pull real G (shown
-  live in the HUD), which bleeds energy, darkens your vision at the edges
-  the harder you pull, and saps control authority above ~7G. Push much
-  past that under sustained load and you risk tearing a wing off — the
-  natural check on yanking the stick at speed instead of an invisible wall.
+- **Flight is a real (simplified) force model, not a speed dial.** Gravity,
+  thrust, drag and lift all act on an actual velocity vector that's
+  independent of which way your nose is pointed — the nose is just where
+  the control surfaces point you, not where you're guaranteed to go. Lift
+  depends on angle of attack and collapses past the stall angle, so **a
+  stalled aircraft genuinely falls under gravity even while its nose still
+  points up** — that gap between where the nose points and where the plane
+  is actually going is the whole sensation of a stall, and it's real
+  physics here, not a scripted animation. Bank *and* pull together for a
+  proper coordinated turn (banking tilts the lift vector, which is what
+  actually curves the flight path); pure pitch with no bank barely turns
+  you at all, exactly like a real aircraft.
+- **G-force is a real number, not an estimate.** It's read directly off
+  the lift your wings are generating (shown live in the HUD), darkens your
+  vision at the edges the harder you pull, and risks tearing a wing off if
+  you hold extreme G too long — the natural check on a hard pull instead
+  of an invisible wall.
 - **Component damage, not just a health bar.** Every hit lands on a
   specific part — engine, left wing, right wing, or tail — tracked
   separately from overall hull integrity, shown live in the HUD (E/L/R/T).
