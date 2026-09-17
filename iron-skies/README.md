@@ -42,7 +42,9 @@ on phones and tablets.
 - Controls have real weight: inputs accelerate the plane's rotation rather
   than snapping it, so turns build up and wind down like an aircraft with
   mass and control-surface lag, not a cursor — tuned to stay responsive
-  rather than feel delayed.
+  rather than feel delayed. Bank *and* pull together (a real coordinated
+  turn) rather than just pulling straight back — pure pitch with no bank
+  barely turns you at all, same as a real aircraft.
 - **A lead indicator does the hard part of aiming for you.** Your bullets
   take time to arrive, so shooting straight at a moving target usually
   misses. Get a plane within roughly 35° of your nose and inside ~950m and

@@ -1112,7 +1112,10 @@
     if (ac.stalling) effPitch += 0.7 * stallAuthority;
     if (wingLost) effPitch += 0.5; // lost lift on one side noses the plane down too
     const effRoll = rollIn * a.rollRate * wingAuthority + wingBias;
-    const effYaw = rollIn * a.rollRate * 0.3 * tailFactor * wingAuthority;
+    // coordinated turn: banking alone doesn't curve the flight path (only pitch/yaw do) — this
+    // converts a good chunk of roll input directly into actual turning, so "bank and pull" reads
+    // as one coordinated turn instead of a corkscrew, matching how the AI's pursuit steers
+    const effYaw = rollIn * a.rollRate * 0.65 * tailFactor * wingAuthority;
 
     // angular inertia: control surfaces accelerate the plane's rotation, they don't snap it —
     // kept snappy (short ramp-up) so it reads as "weight", not "lag"
@@ -1183,7 +1186,7 @@
     } else if (ac.pos.y < 140) {
       desired = v3(ac.basis.forward.x, 0.6, ac.basis.forward.z);
     } else if (dist > 30) {
-      const predictedPlayerPos = vAdd(player.pos, vScale(player.basis.forward, player.speed * 0.55));
+      const predictedPlayerPos = vAdd(player.pos, vScale(player.basis.forward, player.speed * 0.35));
       desired = vSub(predictedPlayerPos, ac.pos);
     } else {
       desired = ac.basis.forward;
