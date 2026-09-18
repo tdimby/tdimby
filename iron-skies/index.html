@@ -1148,7 +1148,7 @@
     // unintended barrel roll — matching the bank-and-hold feel of an arcade dogfighter rather
     // than a full simulator roll axis.
     const bankDeg = Math.atan2(-vDot(ac.basis.right, v3(0, 1, 0)), vDot(ac.basis.up, v3(0, 1, 0))) * 180 / Math.PI;
-    const rollingFurtherIntoBank = rollIn !== 0 && Math.sign(rollIn) === -Math.sign(bankDeg);
+    const rollingFurtherIntoBank = rollIn !== 0 && Math.sign(rollIn) === Math.sign(bankDeg);
     const bankLimiter = rollingFurtherIntoBank
       ? clamp(1 - Math.max(0, Math.abs(bankDeg) - BANK_LIMIT * 0.65) / (BANK_LIMIT * 0.35), 0.05, 1)
       : 1;
@@ -1171,7 +1171,11 @@
     ac.angVel.pitch = lerp(ac.angVel.pitch, effPitch, k);
     ac.angVel.roll = lerp(ac.angVel.roll, effRoll, k);
     ac.angVel.yaw = lerp(ac.angVel.yaw, effYaw, k);
-    ac.basis = applyRotation(ac.basis, ac.angVel.pitch * dt, ac.angVel.roll * dt, ac.angVel.yaw * dt);
+    // roll is negated here: rotateAroundAxis's right-hand-rule convention around the forward
+    // axis makes a positive roll rate bank the aircraft left, which is backwards from the
+    // "press right, bank right" mapping every player expects — this is the one place that
+    // gets corrected, so angVel.roll's sign still matches the rotation math everywhere else
+    ac.basis = applyRotation(ac.basis, ac.angVel.pitch * dt, -ac.angVel.roll * dt, ac.angVel.yaw * dt);
 
     // hard backstop on bank: composing pitch/roll/yaw rotations every frame isn't commutative,
     // so once heavily banked the coordinated-yaw term above (rotating around a heavily-tilted
