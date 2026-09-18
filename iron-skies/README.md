@@ -1,14 +1,13 @@
 # Iron Skies
 
-A pseudo-3D, pixel-art arcade dogfighting game — pick a fighter, take off,
-and hold the line against wave after wave of enemy aircraft. Built entirely
-in one HTML file: a small hand-rolled 3D engine (perspective projection,
-painter's-algorithm depth sorting, low-poly flat-shaded aircraft) rendered
-to a chunky low-resolution canvas for a retro, PS1-era arcade-flight-sim
-look. No build step, no dependencies beyond an optional Google Font.
+A 3D arcade dogfighting game — pick a fighter, take off, and hold the line
+against wave after wave of enemy aircraft. Built entirely in one HTML file:
+a small hand-rolled 3D engine (perspective projection, painter's-algorithm
+depth sorting, flat-shaded aircraft) rendered crisp and smooth at native
+display resolution. No build step, no dependencies beyond an optional
+Google Font.
 
-Think *War Thunder*'s arcade dogfights, redrawn at 480×270 with a phosphor-
-green military HUD.
+Think *War Thunder*'s arcade dogfights, with a phosphor-green military HUD.
 
 ## Play
 
@@ -60,10 +59,17 @@ on phones and tablets.
   see that to judge and hold a proper turn.
 - **A lead indicator does the hard part of aiming for you.** Your bullets
   take time to arrive, so shooting straight at a moving target usually
-  misses. Get a plane within roughly 35° of your nose and inside ~950m and
-  a red bracket locks onto it with its range, plus a separate amber pipper
+  misses. Get a plane within roughly 40° of your nose and inside ~1100m and
+  a bracket locks onto it with its range, plus a separate amber pipper
   showing exactly where to put your reticle to actually hit it — the same
-  idea as a real (or War Thunder-arcade) lead-computing gunsight.
+  idea as a real (or War Thunder-arcade) lead-computing gunsight. The lock
+  is sticky — once acquired it holds onto the same target through a much
+  wider cone instead of dropping the instant your nose wanders off by a
+  degree — and turns solid red with a **LOCK** readout once you've held it
+  for a moment, so you know exactly when a burst is likely to connect.
+  Hit detection tracks each bullet's full path between frames rather than
+  just sampling its position, so a fast-moving target can't slip through
+  the gap between two frames untouched.
 - **An off-screen arrow tracks whoever's closest.** Your view is a
   realistic ~62°, so a hard-turning dogfight routinely pushes the target
   out of frame — without a way to know which way they went, you can't
@@ -129,7 +135,13 @@ orientation is tracked as an orthonormal basis (forward/up/right vectors)
 updated via Rodrigues' rotation formula each frame — no quaternion or
 matrix library needed — projected to screen with a standard pinhole-camera
 perspective divide, and depth-sorted with a painter's algorithm before
-each polygon is filled. Aircraft are hand-authored low-poly meshes (a
-dozen or so flat-shaded triangles each); the ground, mountains, clouds and
-scenery reuse the same projection math. All audio (engine drone, gunfire,
-explosions) is generated live with the Web Audio API — no audio files.
+each polygon is filled. All drawing happens in a fixed logical coordinate
+space that's then scaled onto the canvas's actual backing resolution
+(matched to display size and device pixel ratio, recalculated on resize),
+so the scene renders crisp and anti-aliased at native resolution instead
+of a low-res image stretched up by the browser. Aircraft are hand-authored
+meshes — a tapered fuselage built from cross-section rings rather than a
+single flat diamond, plus swept wings, tail and canopy — flat-shaded per
+face; the ground, mountains, clouds and scenery reuse the same projection
+math. All audio (engine drone, gunfire, explosions) is generated live with
+the Web Audio API — no audio files.

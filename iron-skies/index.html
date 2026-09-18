@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>IRON SKIES — pixelated arcade dogfighting</title>
-<meta name="description" content="A pseudo-3D, pixel-art arcade air combat game. Dogfight waves of enemy fighters in the browser. No install, just fly." />
+<title>IRON SKIES — arcade air combat</title>
+<meta name="description" content="A 3D arcade air combat game. Dogfight waves of enemy fighters in the browser. No install, just fly." />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.85em%22 font-size=%2290%22>&#9992;&#65039;</text></svg>" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet" />
 <style>
   :root {
     --hud: #3dffa0;
@@ -25,7 +25,7 @@
     height: 100%;
     background: #05080a;
     color: var(--hud);
-    font-family: "Press Start 2P", monospace;
+    font-family: "Share Tech Mono", monospace;
     overflow: hidden;
     -webkit-tap-highlight-color: transparent;
     touch-action: none;
@@ -55,9 +55,6 @@
     display: block;
     width: 100%;
     height: 100%;
-    image-rendering: pixelated;
-    image-rendering: -moz-crisp-edges;
-    image-rendering: crisp-edges;
   }
   #vignette {
     position: absolute;
@@ -74,20 +71,6 @@
     z-index: 4;
     transition: background 0.08s ease-out;
   }
-  #scanlines {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    background: repeating-linear-gradient(
-      to bottom,
-      rgba(0, 0, 0, 0) 0px,
-      rgba(0, 0, 0, 0.14) 1px,
-      rgba(0, 0, 0, 0) 3px
-    );
-    mix-blend-mode: multiply;
-    z-index: 5;
-  }
-
   .overlay {
     position: absolute;
     inset: 0;
@@ -241,7 +224,7 @@
     left: 0;
     right: 0;
     text-align: center;
-    font-family: "Press Start 2P", monospace;
+    font-family: "Share Tech Mono", monospace;
     font-size: 8px;
     color: rgba(61, 255, 160, 0.32);
     letter-spacing: 1px;
@@ -267,7 +250,6 @@
     <div id="hud"></div>
     <div id="hitflash"></div>
     <div id="vignette"></div>
-    <div id="scanlines"></div>
 
     <button id="mute" aria-label="toggle sound">SOUND: ON</button>
 
@@ -332,6 +314,13 @@
   function vLen2(a) { return vDot(a, a); }
   function vNorm(a) { const l = vLen(a) || 1; return v3(a.x / l, a.y / l, a.z / l); }
   function vLerp(a, b, t) { return v3(lerp(a.x, b.x, t), lerp(a.y, b.y, t), lerp(a.z, b.z, t)); }
+  function closestPointOnSegment(p, a, b) {
+    const ab = vSub(b, a);
+    const abLen2 = vLen2(ab);
+    if (abLen2 < 1e-6) return a;
+    const t = clamp(vDot(vSub(p, a), ab) / abLen2, 0, 1);
+    return vAdd(a, vScale(ab, t));
+  }
 
   function rotateAroundAxis(v, k, angle) {
     if (angle === 0) return v;
@@ -396,9 +385,26 @@
   /* =========================================================================
      SETUP
   ========================================================================= */
-  const RW = 480, RH = 270; // internal render resolution
+  const RW = 480, RH = 270; // logical render resolution — all draw calls stay in this coordinate
+  // space; only the canvas's actual backing-store resolution (and a matching transform scale)
+  // change with display size, so the game renders crisp and smooth at native resolution instead
+  // of a blocky low-res image stretched up by the browser
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d");
+  let renderScale = 1;
+  function resizeCanvas() {
+    const rect = canvas.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const targetW = Math.max(1, Math.round(rect.width * dpr));
+    const targetH = Math.max(1, Math.round(rect.height * dpr));
+    if (canvas.width !== targetW || canvas.height !== targetH) {
+      canvas.width = targetW;
+      canvas.height = targetH;
+    }
+    renderScale = canvas.width / RW;
+  }
+  window.addEventListener("resize", resizeCanvas);
+  resizeCanvas();
   const hudEl = document.getElementById("hud");
   const hitflashEl = document.getElementById("hitflash");
   const startScreen = document.getElementById("start-screen");
@@ -509,19 +515,47 @@
   function sv3(x, y, z) { return v3(x * MESH_SCALE, y * MESH_SCALE, z * MESH_SCALE); }
 
   function buildPlaneMesh(colors) {
-    const nose = sv3(0, 0.15, 5.0);
-    const top = sv3(0, 1.05, 0.2);
-    const bot = sv3(0, -0.55, 0.5);
-    const left = sv3(-0.95, 0.15, 0.1);
-    const right = sv3(0.95, 0.15, 0.1);
-    const tail = sv3(0, 0.35, -4.4);
+    // fuselage: a tapered tube built from four cross-section rings rather than a single
+    // pinched diamond, for a rounded, recognizable fighter silhouette instead of a flat kite
+    function ring(z, r, yBias) {
+      return {
+        top: sv3(0, yBias + r * 0.9, z),
+        right: sv3(r, yBias - r * 0.05, z),
+        bot: sv3(0, yBias - r * 0.75, z),
+        left: sv3(-r, yBias - r * 0.05, z),
+      };
+    }
+    const noseTip = sv3(0, 0.05, 5.3);
+    const rNose = ring(3.6, 0.36, 0.05);
+    const rCanopy = ring(1.3, 0.66, 0.12);
+    const rMid = ring(-1.8, 0.5, 0.18);
+    const rAft = ring(-3.5, 0.26, 0.25);
+    const tailTip = sv3(0, 0.42, -4.7);
 
-    const faces = [
-      { v: [nose, top, tail], color: colors.top, part: "fuselage" },
-      { v: [nose, tail, bot], color: colors.bottom, part: "fuselage" },
-      { v: [nose, left, tail], color: colors.left, part: "fuselage" },
-      { v: [nose, tail, right], color: colors.right, part: "fuselage" },
-    ];
+    const faces = [];
+    function fan(tip, r, atNose) {
+      const pts = [r.top, r.right, r.bot, r.left];
+      const cols = [colors.top, colors.right, colors.bottom, colors.left];
+      for (let i = 0; i < 4; i++) {
+        const a = pts[i], b = pts[(i + 1) % 4];
+        faces.push({ v: atNose ? [tip, a, b] : [tip, b, a], color: cols[i], part: "fuselage" });
+      }
+    }
+    function band(rA, rB) {
+      faces.push({ v: [rA.top, rB.top, rB.right], color: colors.top, part: "fuselage" });
+      faces.push({ v: [rA.top, rB.right, rA.right], color: colors.right, part: "fuselage" });
+      faces.push({ v: [rA.right, rB.right, rB.bot], color: colors.right, part: "fuselage" });
+      faces.push({ v: [rA.right, rB.bot, rA.bot], color: colors.bottom, part: "fuselage" });
+      faces.push({ v: [rA.bot, rB.bot, rB.left], color: colors.bottom, part: "fuselage" });
+      faces.push({ v: [rA.bot, rB.left, rA.left], color: colors.left, part: "fuselage" });
+      faces.push({ v: [rA.left, rB.left, rB.top], color: colors.left, part: "fuselage" });
+      faces.push({ v: [rA.left, rB.top, rA.top], color: colors.top, part: "fuselage" });
+    }
+    fan(noseTip, rNose, true);
+    band(rNose, rCanopy);
+    band(rCanopy, rMid);
+    band(rMid, rAft);
+    fan(tailTip, rAft, false);
 
     // wings (quad each side, split into 2 tris)
     const wL_rootF = sv3(-0.85, 0.1, 0.7), wL_rootB = sv3(-0.85, 0.05, -0.7);
@@ -550,9 +584,9 @@
     });
 
     return {
-      faces, noseLocal: nose, tailLocal: sv3(0, 0.2, -4.6),
+      faces, noseLocal: noseTip, tailLocal: tailTip,
       partMarkers: {
-        engine: nose,
+        engine: noseTip,
         wingL: sv3(-3.2, 0, -0.4),
         wingR: sv3(3.2, 0, -0.4),
         tail: sv3(0, 0.6, -4.0),
@@ -1389,14 +1423,23 @@
       b.life -= dt;
       if (b.life <= 0) { bullets.splice(i, 1); continue; }
 
+      // swept segment-vs-sphere test against the bullet's whole path this frame, not just its
+      // new position — bullets travel 900u/s, so at 60fps a single frame's step (15u) can be
+      // longer than the hit radius itself, letting a bullet tunnel clean through a target that
+      // was standing right in its path without either sampled position ever landing inside it
       let hit = false;
       if (b.isPlayer) {
+        // a little more forgiving than the enemies' own hitbox on the player — landing a hit
+        // on a maneuvering target is the whole appeal of a dogfight, and pixel-perfect leading
+        // isn't fun to chase down with a mouse/keyboard
         for (const e of enemies) {
           if (!e.alive) continue;
-          if (vLen2(vSub(e.pos, b.pos)) < (6 * MESH_SCALE) * (6 * MESH_SCALE)) { damageAircraft(e, b.dmg, true, b.pos); hit = true; sfxHit(); break; }
+          const closest = closestPointOnSegment(e.pos, b.prevPos, b.pos);
+          if (vLen2(vSub(e.pos, closest)) < (7.5 * MESH_SCALE) * (7.5 * MESH_SCALE)) { damageAircraft(e, b.dmg, true, closest); hit = true; sfxHit(); break; }
         }
       } else if (player.alive) {
-        if (vLen2(vSub(player.pos, b.pos)) < (5.5 * MESH_SCALE) * (5.5 * MESH_SCALE)) { damageAircraft(player, b.dmg, false, b.pos); hit = true; }
+        const closest = closestPointOnSegment(player.pos, b.prevPos, b.pos);
+        if (vLen2(vSub(player.pos, closest)) < (5.5 * MESH_SCALE) * (5.5 * MESH_SCALE)) { damageAircraft(player, b.dmg, false, closest); hit = true; }
       }
       if (hit) bullets.splice(i, 1);
     }
@@ -1724,6 +1767,7 @@
   }
 
   function render() {
+    ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
     ctx.save();
     if (shake > 0) ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake * 0.6);
     drawSky();
@@ -1785,28 +1829,51 @@
 
   const BULLET_SPEED = 900;
 
+  // sticky lock state: kept outside computeLeadTarget so the same target is retained across
+  // frames instead of re-picking "whichever enemy is nearest the crosshair" every single frame,
+  // which used to flicker between two similarly-angled targets and drop instantly the moment the
+  // nose wandered a degree outside the cone — exactly what made the old system feel unreliable
+  let lockedEnemy = null, lockedSince = 0;
+
   // finds the best target ahead of the player and returns both its screen position and
   // a predicted "lead" point — where its bullets need to be aimed to actually hit a moving target
   function computeLeadTarget() {
     if (!player.alive) return null;
-    let best = null, bestScore = 0.82; // ~35 degree cone in front of the nose
-    for (const e of enemies) {
-      if (!e.alive) continue;
-      const rel = vSub(e.pos, player.pos);
-      const dist = vLen(rel);
-      if (dist > 950 || dist < 1) continue;
-      const facing = vDot(player.basis.forward, vScale(rel, 1 / dist));
-      if (facing > bestScore) { bestScore = facing; best = e; }
-    }
-    if (!best) return null;
 
-    const enemyVel = best.velocity;
-    let predicted = best.pos;
+    // retention: once locked, a much wider cone/range keeps the same target rather than losing
+    // it the instant the nose drifts slightly off — real target tracking doesn't snap off that
+    // easily, and this also gives the hard-lock escalation below time to build up in a real fight
+    if (lockedEnemy && lockedEnemy.alive) {
+      const rel = vSub(lockedEnemy.pos, player.pos);
+      const dist = vLen(rel);
+      const facing = dist > 1 ? vDot(player.basis.forward, vScale(rel, 1 / dist)) : 1;
+      if (dist > 1300 || facing < 0.55) lockedEnemy = null;
+    } else {
+      lockedEnemy = null;
+    }
+
+    if (!lockedEnemy) {
+      let best = null, bestScore = 0.76; // ~40 degree cone in front of the nose to acquire
+      for (const e of enemies) {
+        if (!e.alive) continue;
+        const rel = vSub(e.pos, player.pos);
+        const dist = vLen(rel);
+        if (dist > 1100 || dist < 1) continue;
+        const facing = vDot(player.basis.forward, vScale(rel, 1 / dist));
+        if (facing > bestScore) { bestScore = facing; best = e; }
+      }
+      if (best) { lockedEnemy = best; lockedSince = performance.now(); }
+    }
+    if (!lockedEnemy) return null;
+
+    const enemyVel = lockedEnemy.velocity;
+    let predicted = lockedEnemy.pos;
     for (let i = 0; i < 3; i++) {
       const t = vLen(vSub(predicted, player.pos)) / BULLET_SPEED;
-      predicted = vAdd(best.pos, vScale(enemyVel, t));
+      predicted = vAdd(lockedEnemy.pos, vScale(enemyVel, t));
     }
-    return { enemy: best, predicted, dist: vLen(vSub(best.pos, player.pos)) };
+    const hardLock = performance.now() - lockedSince > 350;
+    return { enemy: lockedEnemy, predicted, dist: vLen(vSub(lockedEnemy.pos, player.pos)), hardLock };
   }
 
   function drawLeadIndicator() {
@@ -1814,13 +1881,15 @@
     if (!lead) return;
     const targetProj = project(lead.enemy.pos, cam.pos, cam.basis);
     if (targetProj) {
-      ctx.strokeStyle = "rgba(255,75,62,0.9)";
-      ctx.lineWidth = 1;
-      const s = 6;
+      const lockColor = lead.hardLock ? "255,75,62" : "255,177,0";
+      ctx.strokeStyle = `rgba(${lockColor},0.9)`;
+      ctx.lineWidth = lead.hardLock ? 1.5 : 1;
+      const s = lead.hardLock ? 7 : 6;
       ctx.strokeRect(targetProj.x - s, targetProj.y - s, s * 2, s * 2);
-      ctx.fillStyle = "#ff4b3e";
+      ctx.fillStyle = `rgb(${lockColor})`;
       ctx.font = "7px monospace";
       ctx.fillText(Math.round(lead.dist) + "m", targetProj.x + s + 2, targetProj.y - s);
+      if (lead.hardLock) ctx.fillText("LOCK", targetProj.x + s + 2, targetProj.y - s + 8);
       ctx.font = "8px monospace";
     }
     const leadProj = project(lead.predicted, cam.pos, cam.basis);
