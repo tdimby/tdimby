@@ -45,6 +45,15 @@ on phones and tablets.
   rather than feel delayed. Bank *and* pull together (a real coordinated
   turn) rather than just pulling straight back — pure pitch with no bank
   barely turns you at all, same as a real aircraft.
+- **Roll holds at a max bank instead of spinning you out.** A held roll
+  input has no natural stopping point on a real aileron, and at these roll
+  rates an ordinary hard turn crosses 90° of bank in about a second — carry
+  on past that and you'd flip through inverted, with the turn itself
+  reversing out from under you. Roll authority eases off as you approach
+  max bank (recovering back toward level always stays fully responsive),
+  so holding the stick settles into a steep, controllable turn instead of
+  an unintended barrel roll — the bank-and-hold feel of an arcade
+  dogfighter rather than a full simulator roll axis.
 - **The chase camera shows your real bank angle.** It lags a little on
   quick inputs so a snap-roll doesn't spin the world, but on a sustained
   turn it fully catches up to how banked you actually are — you need to

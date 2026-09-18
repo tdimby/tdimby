@@ -1045,6 +1045,7 @@
   ========================================================================= */
   const GRAVITY = 46;
   const STALL_ANGLE = 18; // degrees of angle-of-attack before lift collapses
+  const BANK_LIMIT = 85; // degrees of bank the player can hold a roll input into before authority eases off
 
   // lift coefficient as a function of (signed) angle of attack: a baseline at zero AoA
   // (cambered-wing simplification), rising toward a peak at the stall angle, then collapsing
@@ -1137,10 +1138,25 @@
       ? clamp(1 - Math.max(0, curAoADeg - STALL_ANGLE * 0.7) / (STALL_ANGLE * 0.5), 0.1, 1)
       : 1;
 
+    // held roll input has no natural stopping point (a real aileron just keeps rolling the
+    // aircraft), and at these roll rates a routine hard turn crosses 90° of bank in about a
+    // second. Past vertical, the coordinated-yaw term below (which depends on the sine of bank)
+    // starts swinging back toward zero and reverses sign once inverted, so an ordinary held turn
+    // would visibly wander past vertical and yaw the wrong way mid-maneuver. Ease off roll
+    // authority as bank builds past ~55° (recovering back toward level always stays fully
+    // authoritative) so holding the stick settles into a max bank instead of carrying on into an
+    // unintended barrel roll — matching the bank-and-hold feel of an arcade dogfighter rather
+    // than a full simulator roll axis.
+    const bankDeg = Math.atan2(-vDot(ac.basis.right, v3(0, 1, 0)), vDot(ac.basis.up, v3(0, 1, 0))) * 180 / Math.PI;
+    const rollingFurtherIntoBank = rollIn !== 0 && Math.sign(rollIn) === -Math.sign(bankDeg);
+    const bankLimiter = rollingFurtherIntoBank
+      ? clamp(1 - Math.max(0, Math.abs(bankDeg) - BANK_LIMIT * 0.65) / (BANK_LIMIT * 0.35), 0.05, 1)
+      : 1;
+
     // --- nose orientation: pitch/roll/yaw with inertia, same as before ---
     const stallAuthority = ac.stalling ? 0.7 : 1;
     let effPitch = pitchIn * a.pitchRate * tailFactor * stallAuthority * aoaLimiter * (wingLost ? 0.6 : 1);
-    const effRoll = rollIn * a.rollRate * wingAuthority + wingBias;
+    const effRoll = rollIn * a.rollRate * wingAuthority * bankLimiter + wingBias;
     // rudder coordination: pitching while banked at anything other than exactly level or exactly
     // knife-edge rotates around a tilted axis, which on its own bleeds pitch into bank drift — a
     // real pilot continuously corrects this with small rudder inputs to hold a clean turn. This
@@ -1156,6 +1172,24 @@
     ac.angVel.roll = lerp(ac.angVel.roll, effRoll, k);
     ac.angVel.yaw = lerp(ac.angVel.yaw, effYaw, k);
     ac.basis = applyRotation(ac.basis, ac.angVel.pitch * dt, ac.angVel.roll * dt, ac.angVel.yaw * dt);
+
+    // hard backstop on bank: composing pitch/roll/yaw rotations every frame isn't commutative,
+    // so once heavily banked the coordinated-yaw term above (rotating around a heavily-tilted
+    // "up" axis) also bleeds into the bank angle itself, on top of whatever roll input asked
+    // for — the easing above alone lets that residual torque slowly carry bank past the limit
+    // over a few seconds even with no further roll held. Re-clamp the basis directly so bank
+    // genuinely never exceeds the limit, regardless of which term produced this frame's rotation.
+    if (!wingLost) {
+      const curBankDeg = Math.atan2(-vDot(ac.basis.right, v3(0, 1, 0)), vDot(ac.basis.up, v3(0, 1, 0))) * 180 / Math.PI;
+      const excessDeg = curBankDeg - clamp(curBankDeg, -BANK_LIMIT, BANK_LIMIT);
+      if (Math.abs(excessDeg) > 0.01) {
+        const corr = excessDeg * Math.PI / 180;
+        let up = vNorm(rotateAroundAxis(ac.basis.up, ac.basis.forward, corr));
+        let right = vNorm(vCross(up, ac.basis.forward));
+        up = vNorm(vCross(ac.basis.forward, right));
+        ac.basis = { forward: ac.basis.forward, up, right };
+      }
+    }
 
     // --- translation: real forces acting on an independent velocity vector ---
     const speed = vLen(ac.velocity);
