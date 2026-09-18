@@ -199,12 +199,17 @@
   }
   #btn-boost:active { background: rgba(255, 177, 0, 0.32); }
 
-  #mute {
+  #top-toggles {
     position: absolute;
     top: clamp(4px, 1.2vw, 8px);
     left: 50%;
     transform: translateX(-50%);
     z-index: 7;
+    display: flex;
+    gap: 6px;
+    pointer-events: none;
+  }
+  #top-toggles button {
     background: rgba(3, 8, 6, 0.6);
     border: 1px solid rgba(61, 255, 160, 0.4);
     color: var(--hud);
@@ -216,7 +221,8 @@
     pointer-events: auto;
     white-space: nowrap;
   }
-  #mute:hover { opacity: 1; }
+  #top-toggles button:hover { opacity: 1; }
+  #top-toggles button.off { border-color: rgba(255, 75, 62, 0.5); color: rgba(61, 255, 160, 0.5); }
 
   footer {
     position: fixed;
@@ -251,7 +257,10 @@
     <div id="hitflash"></div>
     <div id="vignette"></div>
 
-    <button id="mute" aria-label="toggle sound">SOUND: ON</button>
+    <div id="top-toggles">
+      <button id="mute" aria-label="toggle sound">SOUND: ON</button>
+      <button id="aim-assist-btn" aria-label="toggle aim assist">AIM ASSIST: ON</button>
+    </div>
 
     <div id="start-screen" class="overlay">
       <div class="title">IRON SKIES</div>
@@ -416,12 +425,27 @@
   const finalScoreEl = document.getElementById("final-score");
   const newHighEl = document.getElementById("new-high");
   const muteBtn = document.getElementById("mute");
+  const aimAssistBtn = document.getElementById("aim-assist-btn");
   const touchLayer = document.getElementById("touch");
   const pickerEl = document.getElementById("plane-picker");
 
   const HIGH_KEY = "iron-skies-highscore";
   let highScore = 0;
   try { highScore = Number(localStorage.getItem(HIGH_KEY) || 0); } catch (e) {}
+
+  const AIM_ASSIST_KEY = "iron-skies-aimassist";
+  let aimAssist = true;
+  try { const saved = localStorage.getItem(AIM_ASSIST_KEY); if (saved !== null) aimAssist = saved === "1"; } catch (e) {}
+  function refreshAimAssistBtn() {
+    aimAssistBtn.textContent = "AIM ASSIST: " + (aimAssist ? "ON" : "OFF");
+    aimAssistBtn.classList.toggle("off", !aimAssist);
+  }
+  refreshAimAssistBtn();
+  aimAssistBtn.addEventListener("click", () => {
+    aimAssist = !aimAssist;
+    refreshAimAssistBtn();
+    try { localStorage.setItem(AIM_ASSIST_KEY, aimAssist ? "1" : "0"); } catch (e) {}
+  });
 
   const FOV_Y = 62 * Math.PI / 180;
   const FOCAL = (RH / 2) / Math.tan(FOV_Y / 2);
@@ -1279,7 +1303,21 @@
     const dmg = ac.archetype.gunDamage;
     const muzzle = vAdd(ac.pos, vScale(ac.basis.forward, 5.2 * MESH_SCALE));
     const spread = ac.isPlayer ? 0.004 : 0.02;
-    const dir = vNorm(vAdd(ac.basis.forward, v3(rand(-spread, spread), rand(-spread, spread), rand(-spread, spread))));
+
+    // aim assist: nudges the fired shot toward the locked target's lead point, but only within
+    // a narrow cone around where the nose is already pointing — it forgives small aiming error
+    // once you've got a hard lock rather than aiming the gun for you from an arbitrary angle
+    let aimDir = ac.basis.forward;
+    if (ac.isPlayer && aimAssist) {
+      const lead = computeLeadTarget();
+      if (lead && lead.hardLock) {
+        const toLead = vNorm(vSub(lead.predicted, muzzle));
+        const angle = Math.acos(clamp(vDot(ac.basis.forward, toLead), -1, 1));
+        if (angle < 10 * Math.PI / 180) aimDir = vNorm(vLerp(ac.basis.forward, toLead, 0.6));
+      }
+    }
+
+    const dir = vNorm(vAdd(aimDir, v3(rand(-spread, spread), rand(-spread, spread), rand(-spread, spread))));
     bullets.push({
       pos: muzzle, prevPos: muzzle, vel: vScale(dir, 900),
       life: ac.archetype.gunRange / 900, dmg, isPlayer: ac.isPlayer, owner: ac,
@@ -1690,9 +1728,6 @@
             for (let i = 1; i < proj.length; i++) ctx.lineTo(proj[i].x, proj[i].y);
             ctx.closePath();
             ctx.fill();
-            ctx.strokeStyle = "rgba(8,8,10,0.6)";
-            ctx.lineWidth = 1;
-            ctx.stroke();
           },
         });
       }
@@ -1806,25 +1841,52 @@
     ctx.fillRect(0, 0, RW, RH);
   }
 
-  const SYSTEM_LABELS = [["E", "engine"], ["L", "wingL"], ["R", "wingR"], ["T", "tail"]];
-  function drawSystemsStatus(cxr, y) {
-    const boxW = 16, gap = 3;
-    const totalW = SYSTEM_LABELS.length * boxW + (SYSTEM_LABELS.length - 1) * gap;
-    let sx = cxr - totalW / 2;
-    hudPanel(sx - 4, y - 4, totalW + 8, 16);
-    for (const [label, key] of SYSTEM_LABELS) {
-      const c = player.components[key];
-      let color;
-      if (c.destroyed) color = "#3a3a3a";
-      else if (c.onFire) color = Math.floor(performance.now() / 150) % 2 === 0 ? "#ff4b3e" : "#ffb100";
-      else if (c.health / c.max < 0.4) color = "#ffb100";
-      else color = "#3dffa0";
-      ctx.fillStyle = color;
-      ctx.fillRect(sx, y, boxW - 2, 8);
-      ctx.fillStyle = c.destroyed ? "#aaa" : "#05080a";
-      ctx.fillText(label, sx + 4, y);
-      sx += boxW + gap;
-    }
+  // a small top-down aircraft silhouette (nose, both wings, tail) instead of abstract letter
+  // boxes — each region is colored by that component's own health so damage reads at a glance
+  // as "which part of the plane is hurt" rather than needing to parse a label
+  function componentColor(c) {
+    if (c.destroyed) return "#3a3a3a";
+    if (c.onFire) return Math.floor(performance.now() / 150) % 2 === 0 ? "#ff4b3e" : "#ffb100";
+    if (c.health / c.max < 0.4) return "#ffb100";
+    return "#3dffa0";
+  }
+  function drawSystemsStatus(cx, cy) {
+    const w = 44, h = 30;
+    hudPanel(cx - w / 2 - 4, cy - h / 2 - 4, w + 8, h + 8);
+    const comp = player.components;
+
+    // tail fin + stabilizer block
+    ctx.fillStyle = componentColor(comp.tail);
+    ctx.fillRect(cx - 1, cy + h / 2 - 13, 2, 6);
+    ctx.fillRect(cx - 4, cy + h / 2 - 8, 8, 7);
+
+    // fuselage / engine (nose to mid-body)
+    ctx.fillStyle = componentColor(comp.engine);
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - h / 2);
+    ctx.lineTo(cx + 3.5, cy - h / 2 + 9);
+    ctx.lineTo(cx + 2.5, cy + h / 2 - 7);
+    ctx.lineTo(cx - 2.5, cy + h / 2 - 7);
+    ctx.lineTo(cx - 3.5, cy - h / 2 + 9);
+    ctx.closePath();
+    ctx.fill();
+
+    // wings (swept, extending to either side)
+    ctx.fillStyle = componentColor(comp.wingL);
+    ctx.beginPath();
+    ctx.moveTo(cx - 3, cy - 3);
+    ctx.lineTo(cx - w / 2, cy + 7);
+    ctx.lineTo(cx - 3, cy + 7);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = componentColor(comp.wingR);
+    ctx.beginPath();
+    ctx.moveTo(cx + 3, cy - 3);
+    ctx.lineTo(cx + w / 2, cy + 7);
+    ctx.lineTo(cx + 3, cy + 7);
+    ctx.closePath();
+    ctx.fill();
   }
 
   const BULLET_SPEED = 900;

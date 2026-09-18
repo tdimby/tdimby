@@ -31,7 +31,8 @@ python3 -m http.server 8000
 | Mute                 | `M`                        |
 
 Touch controls (virtual stick + fire/boost buttons) appear automatically
-on phones and tablets.
+on phones and tablets. A **SOUND** and an **AIM ASSIST** toggle sit at the
+top of the screen — both remember your choice between sessions.
 
 ## How it plays
 
@@ -70,6 +71,12 @@ on phones and tablets.
   Hit detection tracks each bullet's full path between frames rather than
   just sampling its position, so a fast-moving target can't slip through
   the gap between two frames untouched.
+- **Aim assist (toggle at the top of the screen, on by default).** Once
+  you've held a hard lock for a moment, shots fired within a narrow cone
+  of your actual aim get nudged toward the lead point — it forgives small
+  aiming error near a lock rather than aiming the gun for you from an
+  arbitrary angle, so it's still on you to get the nose close. Turn it off
+  for a purely manual, no-assist gunsight.
 - **An off-screen arrow tracks whoever's closest.** Your view is a
   realistic ~62°, so a hard-turning dogfight routinely pushes the target
   out of frame — without a way to know which way they went, you can't
@@ -95,13 +102,16 @@ on phones and tablets.
   of an invisible wall.
 - **Component damage, not just a health bar.** Every hit lands on a
   specific part — engine, left wing, right wing, or tail — tracked
-  separately from overall hull integrity, shown live in the HUD (E/L/R/T).
-  Lose the engine and you're gliding on whatever speed and altitude you
-  had left. Lose a wing and the aircraft becomes barely controllable and
-  will eventually go down — no coming back from that one. Damaged parts
-  can catch fire and burn until they're destroyed (or, rarely, burn out on
-  their own), and destroyed wings/tail sections visibly disappear from the
-  aircraft.
+  separately from overall hull integrity, shown live as a small top-down
+  plane diagram in the HUD: each part is colored by its own condition
+  (green, amber when it's hurting, flashing when it's on fire, gray once
+  it's gone) so you can read what's actually wrong with your aircraft at
+  a glance instead of parsing a letter. Lose the engine and you're gliding
+  on whatever speed and altitude you had left. Lose a wing and the
+  aircraft becomes barely controllable and will eventually go down — no
+  coming back from that one. Damaged parts can catch fire and burn until
+  they're destroyed (or, rarely, burn out on their own), and destroyed
+  wings/tail sections visibly disappear from the aircraft.
 - **Enemy fighters fly with the same energy limits you do.** They chase and
   intercept using the real force model too, with their own angle-of-attack
   guardrail so a hard pursuit doesn't repeatedly snap their nose past the
